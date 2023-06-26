@@ -226,6 +226,7 @@ const xmlSitemapTypes = {
 export default {
   allIssueFileName: 'all_issues',
   cliZipFileName: 'a11y-scan-results.zip',
+  exportDirectory: process.cwd(), 
   maxRequestsPerCrawl,
   maxConcurrency: 50,
   scannerTypes,

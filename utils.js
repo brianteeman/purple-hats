@@ -31,9 +31,20 @@ export const isWhitelistedContentType = contentType => {
   return whitelist.filter(type => contentType.trim().startsWith(type)).length === 1;
 };
 
-export const getStoragePath = randomToken =>
-  `results/${randomToken}_${constants.urlsCrawledObj.scanned.length}pages`;
-
+export const getStoragePath = (randomToken) => {
+  if (constants.exportDirectory === process.cwd()) {
+    return `results/${randomToken}_${constants.urlsCrawledObj.scanned.length}pages`; 
+  } else {
+    if (!path.isAbsolute(constants.exportDirectory)) {
+      constants.exportDirectory = path.resolve(process.cwd(), constants.exportDirectory);
+    }
+    if (!constants.exportDirectory.endsWith("Purple HATS")) {
+      constants.exportDirectory += "/" + "Purple HATS";
+    }
+    return `${constants.exportDirectory}/${randomToken}_${constants.urlsCrawledObj.scanned.length}pages`;
+  }
+}
+  
 export const createDetailsAndLogs = async (scanDetails, randomToken) => {
   const storagePath = getStoragePath(randomToken);
   const logPath = `logs/${randomToken}`;
