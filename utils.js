@@ -38,9 +38,6 @@ export const getStoragePath = (randomToken) => {
     if (!path.isAbsolute(constants.exportDirectory)) {
       constants.exportDirectory = path.resolve(process.cwd(), constants.exportDirectory);
     }
-    if (!constants.exportDirectory.endsWith("Purple HATS")) {
-      constants.exportDirectory += "/" + "Purple HATS";
-    }
     return `${constants.exportDirectory}/${randomToken}_${constants.urlsCrawledObj.scanned.length}pages`;
   }
 }
