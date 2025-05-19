@@ -18,17 +18,14 @@ import { minimatch } from 'minimatch';
 import { globSync, GlobOptionsWithFileTypesFalse } from 'glob';
 import { LaunchOptions, Locator, Page, devices, webkit } from 'playwright';
 import printMessage from 'print-message';
-// @ts-ignore
-import * as Sentry from '@sentry/node';
 import constants, {
   getDefaultChromeDataDir,
   getDefaultEdgeDataDir,
   getDefaultChromiumDataDir,
   proxy,
-  sentryConfig,
-    // Legacy code start - Google Sheets submission
+  // Legacy code start - Google Sheets submission
   formDataFields,
-    // Legacy code end - Google Sheets submission
+  // Legacy code end - Google Sheets submission
   ScannerTypes,
   BrowserTypes,
 } from './constants.js';
@@ -1758,159 +1755,42 @@ export const submitForm = async (
   numberOfPagesNotScanned: number,
   metadata: string,
 ) => {
-  // Initialize Sentry
-  Sentry.init(sentryConfig);
-
-  // Format the data as you want it to appear in Sentry
-  const additionalPageData = {
-    pagesNotScanned: numberOfPagesNotScanned,
-    redirectsScanned: numberOfRedirectsScanned
-  };
-
-  // Extract issue occurrences from scan results if possible
-  const issueOccurrences = extractIssueOccurrences(scanResultsJson);
-  
-  // Determine if it's a government website
-  const isGov = entryUrl.includes('.gov');
-  
-  // Get email domain/tag
-  const emailTag = email.split('@')[1] || '';
-  
-  // Format timestamp 
-  const timestamp = new Date().toISOString();
-  
-  // Prepare redirect URL if different from entry URL
-  const redirectUrl = scannedUrl !== entryUrl ? scannedUrl : null;
-  
-  try {
-    // Capture the scan data as a Sentry event with each field as a separate entry
-    Sentry.captureEvent({
-      message: `Accessibility scan completed for ${entryUrl}`,
-      level: 'info',
-      tags: {
-        scanType: scanType,
-        browser: browserToRun,
-        isGov: isGov,
-        emailDomain: emailTag,
-      },
-      user: {
-        email: email,
-        username: name,
-      },
-      extra: {
-        // Top-level fields as shown in your screenshot
-        entryUrl: entryUrl,
-        websiteUrl: scannedUrl,
-        scanType: scanType,
-        numberOfPagesScanned: numberOfPagesScanned,
-        metadata: metadata ? JSON.parse(metadata) : {},
-        scanResults: scanResultsJson.length > 8000 ? 
-          scanResultsJson.substring(0, 8000) + '...[truncated]' : 
-          scanResultsJson,
-        
-        // Additional fields you requested
-        additionalPageData: additionalPageData,
-        additionalScan: additionalPageData,
-        additionalPagesData: additionalPageData,
-        
-        // Individual fields as requested
-        timestamp: timestamp,
-        redirectUrl: redirectUrl,
-        isGov: isGov,
-        emailTag: emailTag,
-        consolidatedScanType: scanType.toLowerCase(),
-        email: email,
-        name: name,
-        filledNoPagesScanned: numberOfPagesScanned > 0,
-        redirectsScanned: numberOfRedirectsScanned,
-        pagesNotScanned: numberOfPagesNotScanned,
-        issueOccurrences: issueOccurrences
-      }
-    });
-
-    // IMPORTANT: Wait for the event to be sent
-    await Sentry.flush(2000); // Wait up to 2 seconds for the event to be sent
-    
-  } catch (error) {
-    console.error('Error sending data to Sentry:', error);
-  }
-
   // Legacy code start - Google Sheets submission
-  try {
-    const additionalPageDataJson = JSON.stringify({
-      redirectsScanned: numberOfRedirectsScanned,
-      pagesNotScanned: numberOfPagesNotScanned,
-    });
+  const additionalPageDataJson = JSON.stringify({
+    redirectsScanned: numberOfRedirectsScanned,
+    pagesNotScanned: numberOfPagesNotScanned,
+  });
 
-    let finalUrl =
-      `${formDataFields.formUrl}?` +
-      `${formDataFields.entryUrlField}=${entryUrl}&` +
-      `${formDataFields.scanTypeField}=${scanType}&` +
-      `${formDataFields.emailField}=${email}&` +
-      `${formDataFields.nameField}=${name}&` +
-      `${formDataFields.resultsField}=${encodeURIComponent(scanResultsJson)}&` +
-      `${formDataFields.numberOfPagesScannedField}=${numberOfPagesScanned}&` +
-      `${formDataFields.additionalPageDataField}=${encodeURIComponent(additionalPageDataJson)}&` +
-      `${formDataFields.metadataField}=${encodeURIComponent(metadata)}`;
+  let finalUrl =
+    `${formDataFields.formUrl}?` +
+    `${formDataFields.entryUrlField}=${entryUrl}&` +
+    `${formDataFields.scanTypeField}=${scanType}&` +
+    `${formDataFields.emailField}=${email}&` +
+    `${formDataFields.nameField}=${name}&` +
+    `${formDataFields.resultsField}=${encodeURIComponent(scanResultsJson)}&` +
+    `${formDataFields.numberOfPagesScannedField}=${numberOfPagesScanned}&` +
+    `${formDataFields.additionalPageDataField}=${encodeURIComponent(additionalPageDataJson)}&` +
+    `${formDataFields.metadataField}=${encodeURIComponent(metadata)}`;
 
-    if (scannedUrl !== entryUrl) {
-      finalUrl += `&${formDataFields.redirectUrlField}=${scannedUrl}`;
-    }
+  if (scannedUrl !== entryUrl) {
+    finalUrl += `&${formDataFields.redirectUrlField}=${scannedUrl}`;
+  }
 
-    if (proxy) {
-      await submitFormViaPlaywright(browserToRun, userDataDirectory, finalUrl);
-    } else {
-      try {
-        await axios.get(finalUrl, { timeout: 2000 });
-      } catch (error) {
-        if (error.code === 'ECONNABORTED') {
-          if (browserToRun || constants.launcher === webkit) {
-            await submitFormViaPlaywright(browserToRun, userDataDirectory, finalUrl);
-          }
+  if (proxy) {
+    await submitFormViaPlaywright(browserToRun, userDataDirectory, finalUrl);
+  } else {
+    try {
+      await axios.get(finalUrl, { timeout: 2000 });
+    } catch (error) {
+      if (error.code === 'ECONNABORTED') {
+        if (browserToRun || constants.launcher === webkit) {
+          await submitFormViaPlaywright(browserToRun, userDataDirectory, finalUrl);
         }
       }
     }
-    console.log('Legacy Google Sheets form submitted successfully');
-  } catch (legacyError) {
-    console.error('Error submitting legacy Google Sheets form:', legacyError);
   }
-  // Legacy code end - Google Sheets submission
 };
-
-// Helper function to extract issue occurrences from scan results
-function extractIssueOccurrences(scanResultsJson: string): number {
-  try {
-    const results = JSON.parse(scanResultsJson);
-    // Count total occurrences from all issues in the scan results
-    // This may need adjustment based on your specific JSON structure
-    let totalOccurrences = 0;
-    
-    // Try to parse the format shown in your screenshot
-    if (typeof results === 'object') {
-      // Loop through all keys that have "occurrences" properties
-      Object.keys(results).forEach(key => {
-        if (results[key] && typeof results[key] === 'object' && 'occurrences' in results[key]) {
-          totalOccurrences += parseInt(results[key].occurrences, 10) || 0;
-        }
-      });
-      
-      // If we found any occurrences, return the total
-      if (totalOccurrences > 0) {
-        return totalOccurrences;
-      }
-    }
-    
-    // Fallback to direct occurrences property if available
-    if (results && results.occurrences) {
-      return parseInt(results.occurrences, 10) || 0;
-    }
-    
-    return 0;
-  } catch (e) {
-    console.error('Error extracting issue occurrences:', e);
-    return 0;
-  }
-}
+// Legacy code end - Google Sheets submission
 
 export async function initModifiedUserAgent(
   browser?: string,
@@ -2001,21 +1881,27 @@ export const waitForPageLoaded = async (page: Page, timeout = 10000) => {
     page.waitForLoadState('networkidle'), // Wait for network requests to settle
     new Promise(resolve => setTimeout(resolve, timeout)), // Hard timeout as a fallback
     page.evaluate(OBSERVER_TIMEOUT => {
-      return new Promise(resolve => {
+      return new Promise<string>(resolve => {
         // Skip mutation check for PDFs
         if (document.contentType === 'application/pdf') {
           resolve('Skipping DOM mutation check for PDF.');
           return;
         }
 
+        const root = document.documentElement || document.body;
+        if (!(root instanceof Node)) {
+          // Not a valid DOM root—treat as loaded
+          resolve('No valid root to observe; treating as loaded.');
+          return;
+        }
+
         let timeout: NodeJS.Timeout;
         let mutationCount = 0;
-        const MAX_MUTATIONS = 250; // Limit max mutations
+        const MAX_MUTATIONS = 250;
         const mutationHash: Record<string, number> = {};
 
         const observer = new MutationObserver(mutationsList => {
           clearTimeout(timeout);
-
           mutationCount++;
           if (mutationCount > MAX_MUTATIONS) {
             observer.disconnect();
@@ -2023,24 +1909,20 @@ export const waitForPageLoaded = async (page: Page, timeout = 10000) => {
             return;
           }
 
-          mutationsList.forEach(mutation => {
+          for (const mutation of mutationsList) {
             if (mutation.target instanceof Element) {
-              Array.from(mutation.target.attributes).forEach(attr => {
-                const mutationKey = `${mutation.target.nodeName}-${attr.name}`;
-
-                if (mutationKey) {
-                  mutationHash[mutationKey] = (mutationHash[mutationKey] || 0) + 1;
-
-                  if (mutationHash[mutationKey] >= 10) {
-                    observer.disconnect();
-                    resolve(`Repeated mutation detected for ${mutationKey}, exiting.`);
-                  }
+              for (const attr of Array.from(mutation.target.attributes)) {
+                const key = `${mutation.target.nodeName}-${attr.name}`;
+                mutationHash[key] = (mutationHash[key] || 0) + 1;
+                if (mutationHash[key] >= 10) {
+                  observer.disconnect();
+                  resolve(`Repeated mutation detected for ${key}, exiting.`);
+                  return;
                 }
-              });
+              }
             }
-          });
+          }
 
-          // If no mutations occur for 1 second, resolve
           timeout = setTimeout(() => {
             observer.disconnect();
             resolve('DOM stabilized after mutations.');
@@ -2053,9 +1935,10 @@ export const waitForPageLoaded = async (page: Page, timeout = 10000) => {
           resolve('Observer timeout reached, exiting.');
         }, OBSERVER_TIMEOUT);
 
-        observer.observe(document.documentElement, {
+        // Only observe if root is a Node
+        observer.observe(root, {
           childList: true,
-          subtree: true,
+          subtree:   true,
           attributes: true,
         });
       });
