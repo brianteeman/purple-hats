@@ -31,7 +31,7 @@ import constants, {
 } from './constants.js';
 import { consoleLogger, silentLogger } from '../logs.js';
 import { isUrlPdf } from '../crawlers/commonCrawlerFunc.js';
-import { randomThreeDigitNumberString } from '../utils.js';
+import { cleanUpAndExit, randomThreeDigitNumberString, register } from '../utils.js';
 import { Answers, Data } from '../index.js';
 import { DeviceDescriptor } from '../types/types.js';
 
@@ -305,6 +305,8 @@ const checkUrlConnectivityWithBrowser = async (
       ...getPlaywrightLaunchOptions(browserToRun),
       ...playwrightDeviceDetailsObject,
     });
+
+    register(browserContext);
   } catch (err) {
     printMessage([`Unable to launch browser\n${err}`], messageOptions);
     res.status = constants.urlCheckStatuses.browserError.code;
@@ -463,7 +465,7 @@ export const parseHeaders = (header?: string): Record<string, string> => {
         ],
         messageOptions,
       );
-      process.exit(1);
+      cleanUpAndExit(1);
     }
     allHeaders[headerValuePair[0]] = headerValuePair[1]; // {"header": "value", "header2": "value2", ...}
   });
@@ -557,6 +559,9 @@ export const prepareData = async (argv: Answers): Promise<Data> => {
     constants.robotsTxtUrls = {};
     await getUrlsFromRobotsTxt(url, browserToRun, resolvedUserDataDirectory, extraHTTPHeaders);
   }
+
+  constants.userDataDirectory = resolvedUserDataDirectory;
+  constants.randomToken = resultFilename;
 
   return {
     type: scanner,
@@ -675,6 +680,8 @@ const getRobotsTxtViaPlaywright = async (robotsUrl: string, browser: string, use
     ...getPlaywrightLaunchOptions(browser),
     ...(extraHTTPHeaders && { extraHTTPHeaders }),
   });
+
+  register(browserContext);
 
   const page = await browserContext.newPage();
 
@@ -848,6 +855,7 @@ export const getLinksFromSitemap = async (
         },
       );
 
+      register(browserContext);
       const page = await browserContext.newPage();
 
       await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
@@ -1603,6 +1611,8 @@ export const submitFormViaPlaywright = async (
     },
   );
 
+  register(browserContext);
+
   const page = await browserContext.newPage();
 
   try {
@@ -1706,6 +1716,8 @@ export async function initModifiedUserAgent(
   : '';
 
   const browserContext = await constants.launcher.launchPersistentContext(effectiveUserDataDirectory, launchOptions);
+  register(browserContext);
+  
   const page = await browserContext.newPage();
 
   // Retrieve the default user agent.

@@ -5,10 +5,11 @@ import { globSync } from 'glob';
 import which from 'which';
 import os from 'os';
 import { spawnSync, execSync } from 'child_process';
-import { chromium } from 'playwright';
+import { Browser, BrowserContext, chromium } from 'playwright';
 import * as Sentry from '@sentry/node';
 import { consoleLogger, silentLogger } from '../logs.js';
 import { PageInfo } from '../mergeAxeResults.js';
+import { PlaywrightCrawler } from 'crawlee';
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
@@ -136,7 +137,7 @@ export const getDefaultChromiumDataDir = () => {
     }
     return null;
   } catch (error) {
-    silentLogger.error(`Error in getDefaultChromiumDataDir(): ${error}`);
+    consoleLogger.error(`Error in getDefaultChromiumDataDir(): ${error}`);
   }
 };
 
@@ -239,7 +240,7 @@ export const getProxy = (): { type: string; url: string } | null => {
         .split('\n');
     } catch (e) {
       console.log(e.toString());
-      silentLogger.error(e.toString());
+      consoleLogger.error(e.toString());
     }
 
     const getSettingValue = (settingName: string) =>
@@ -405,6 +406,7 @@ const urlCheckStatuses = {
   },
   axiosTimeout: { code: 18, message: 'Axios timeout exceeded. Falling back on browser checks.' },
   notALocalFile: { code: 19, message: 'Provided filepath is not a local html or sitemap file.' },
+  terminationRequested: { code: 15, message: 'Termination requested.' }
 };
 
 /* eslint-disable no-unused-vars */
@@ -467,6 +469,13 @@ export default {
   wcagLinks,
   robotsTxtUrls: null,
   userDataDirectory: null, // This will be set later in the code
+  randomToken: null, // This will be set later in the code
+  // Track all active Crawlee / Playwright resources for cleanup
+  resources: {
+      crawlers: new Set<PlaywrightCrawler>(),
+      browserContexts: new Set<BrowserContext>(),
+      browsers: new Set<Browser>(),
+    },
 };
 
 export const rootPath = dirname;

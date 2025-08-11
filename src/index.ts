@@ -7,6 +7,8 @@ import {
   cleanUp,
   getUserDataTxt,
   writeToUserDataTxt,
+  listenForCleanUp,
+  cleanUpAndExit,
 } from './utils.js';
 import {
   prepareData,
@@ -106,19 +108,19 @@ const runScan = async (answers: Answers) => {
   answers.metadata = '{}';
 
   const data: Data = await prepareData(answers);
+  
+  // Executes cleanUp script if error encountered
+  listenForCleanUp(data.randomToken);
+  
   data.userDataDirectory = getClonedProfilesWithRandomToken(data.browser, data.randomToken);
 
   printMessage(['Scanning website...'], messageOptions);
 
   await combineRun(data, screenToScan);
 
-  // Delete cloned directory
-  deleteClonedProfiles(data.browser, data.randomToken);
-
   // Delete dataset and request queues
-  cleanUp(data.randomToken);
+  cleanUpAndExit(0, data.randomToken);
 
-  process.exit(0);
 };
 
 if (userData) {

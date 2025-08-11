@@ -1,7 +1,7 @@
 /* eslint-env browser */
 import { chromium } from 'playwright';
 import { createCrawleeSubFolders } from './commonCrawlerFunc.js';
-import { cleanUp } from '../utils.js';
+import { cleanUpAndExit, register} from '../utils.js';
 import constants, {
   getIntermediateScreenshotsPath,
   guiInfoStatusTypes,
@@ -48,7 +48,6 @@ const runCustom = async (
   includeScreenshots: boolean,
 ) => {
   // checks and delete datasets path if it already exists
-  cleanUp(randomToken);
   process.env.CRAWLEE_STORAGE_DIR = randomToken;
 
   const urlsCrawled: UrlsCrawled = { ...constants.urlsCrawledObj };
@@ -83,6 +82,8 @@ const runCustom = async (
       ...viewportSettings.playwrightDeviceDetailsObject,
     });
 
+    register(context);
+
     // Detection of new page
     context.on('page', async newPage => {
       await initNewPage(newPage, pageClosePromises, processPageParams, pagesDict);
@@ -107,7 +108,7 @@ const runCustom = async (
     await allPagesClosedPromise(pageClosePromises);
   } catch (error) {
     log(`PLAYWRIGHT EXECUTION ERROR ${error}`);
-    process.exit(1);
+    cleanUpAndExit(1, randomToken, true);
   }
 
   guiInfoLog(guiInfoStatusTypes.COMPLETED, {});
