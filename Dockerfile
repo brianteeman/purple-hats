@@ -2,9 +2,14 @@
 # Node version is v22
 FROM mcr.microsoft.com/playwright:v1.50.1-noble
 
-# Installation of packages for oobee and runner
-RUN apt-get update && apt-get install -y zip git
-
+# Installation of packages for oobee and runner (locked versions from build log)
+RUN apt-get update && apt-get install -y \
+    git=1:2.43.0-1ubuntu7.3 \
+    git-man=1:2.43.0-1ubuntu7.3 \
+    unzip=6.0-28ubuntu4.1 \
+    zip=3.0-13ubuntu0.2 \
+ && rm -rf /var/lib/apt/lists/*
+ 
 WORKDIR /app/oobee
 
 # Clone oobee repository
