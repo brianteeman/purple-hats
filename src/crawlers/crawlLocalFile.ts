@@ -6,6 +6,7 @@ import constants, {
   guiInfoStatusTypes,
   basicAuthRegex,
   UrlsCrawled,
+  STATUS_CODE_METADATA,
 } from '../constants/constants.js';
 import { ViewportSettingsClass } from '../combine.js';
 import {
@@ -17,7 +18,7 @@ import {
 import { runPdfScan, mapPdfScanResults, doPdfScreenshots } from './pdfScanFunc.js';
 import { guiInfoLog } from '../logs.js';
 import crawlSitemap from './crawlSitemap.js';
-import { register } from '../utils.js';
+import { getStoragePath, register } from '../utils.js';
 
 export const crawlLocalFile = async ({
   url,
@@ -59,7 +60,7 @@ export const crawlLocalFile = async ({
   let dataset: any;
   let urlsCrawled: UrlsCrawled;
   let linksFromSitemap = [];
-  let sitemapUrl = url; 
+  let sitemapUrl: string; 
 
   // Boolean to omit axe scan for basic auth URL
   let isBasicAuth: boolean;
@@ -76,10 +77,13 @@ export const crawlLocalFile = async ({
 
   }
 
+  // Checks if its in the right file format, and change it before placing into linksFromSitemap
+  url = convertLocalFileToPath(url);
+
   // Check if the sitemapUrl is a local file and if it exists
-  if (!isFilePath(sitemapUrl) || !fs.existsSync(sitemapUrl)) {
+  if (!fs.existsSync(url) && !isFilePath(url)) {
     // Convert to an absolute path
-    let normalizedPath = path.resolve(sitemapUrl);
+    let normalizedPath = path.resolve(url);
 
     // Normalize the path to handle different path separators
     normalizedPath = path.normalize(normalizedPath);
@@ -90,17 +94,15 @@ export const crawlLocalFile = async ({
     }
 
     // At this point, normalizedPath is a valid and existing file path
-    sitemapUrl = normalizedPath;
+    url = normalizedPath;
   }
 
-  // Checks if its in the right file format, and change it before placing into linksFromSitemap
-  convertLocalFileToPath(sitemapUrl);
-
   // XML Files
-  if (!(sitemapUrl.match(/\.xml$/i) || sitemapUrl.match(/\.txt$/i))) {
-    linksFromSitemap = [new Request({ url: sitemapUrl })];
+  if (!(url.match(/\.xml$/i) || url.match(/\.txt$/i))) {
+    linksFromSitemap = [new Request({ url: url })];
     // Non XML file
   } else {
+    sitemapUrl = url;
     // Put it to crawlSitemap function to handle xml files
     const updatedUrlsCrawled = await crawlSitemap({
       sitemapUrl,
@@ -127,12 +129,6 @@ export const crawlLocalFile = async ({
     return urlsCrawled;
   }
 
-  try {
-    sitemapUrl = encodeURI(sitemapUrl);
-  } catch (e) {
-    console.log(e);
-  }
-
   const uuidToPdfMapping: Record<string, string> = {}; // key and value of string type
 
   finalLinks = [...finalLinks, ...linksFromSitemap];
@@ -142,16 +138,15 @@ export const crawlLocalFile = async ({
   });
 
   const request = linksFromSitemap[0];
-  const pdfFileName = path.basename(request.url);
-  const trimmedUrl: string = request.url;
-  const destinationFilePath: string = `${randomToken}/${pdfFileName}`;
-  const data: Buffer = fs.readFileSync(trimmedUrl);
+  const pdfFileName = path.basename(url);
+  const destinationFilePath: string = `${getStoragePath(randomToken)}/${pdfFileName}`;
+  const data: Buffer = fs.readFileSync(url);
   fs.writeFileSync(destinationFilePath, data);
-  uuidToPdfMapping[pdfFileName] = trimmedUrl;
+  uuidToPdfMapping[pdfFileName] = url;
 
   let shouldAbort = false;
 
-  if (!isUrlPdf(request.url)) {
+  if (!isUrlPdf(url)) {
     const effectiveUserDataDirectory = process.env.CRAWLEE_HEADLESS === '1'
       ? userDataDirectory
       : '';
@@ -172,8 +167,8 @@ export const crawlLocalFile = async ({
     : null;
 
     const page = await browserContext.newPage();
-    request.url = convertPathToLocalFile(request.url);
-    await page.goto(request.url);
+    url = convertPathToLocalFile(url);
+    await page.goto(url);
 
     if (shouldAbort) {
       console.warn('Scan aborted due to timeout before page scan.');
@@ -184,33 +179,33 @@ export const crawlLocalFile = async ({
 
     const results = await runAxeScript({ includeScreenshots, page, randomToken });
 
-    const actualUrl = page.url() || request.loadedUrl || request.url;
+    const actualUrl = page.url() || request.loadedUrl || url;
 
     guiInfoLog(guiInfoStatusTypes.SCANNED, {
       numScanned: urlsCrawled.scanned.length,
-      urlScanned: request.url,
+      urlScanned: url,
     });
 
     urlsCrawled.scanned.push({
-      url: request.url,
+      url: url,
       pageTitle: results.pageTitle,
       actualUrl: actualUrl, // i.e. actualUrl
     });
 
     urlsCrawled.scannedRedirects.push({
-      fromUrl: request.url,
+      fromUrl: url,
       toUrl: actualUrl, // i.e. actualUrl
     });
 
-    results.url = request.url;
+    results.url = url;
     results.actualUrl = actualUrl;
 
     await dataset.pushData(results);
   } else {
     urlsCrawled.scanned.push({
-      url: trimmedUrl,
+      url: url,
       pageTitle: pdfFileName,
-      actualUrl: trimmedUrl,
+      actualUrl: url,
     });
 
     await runPdfScan(randomToken);

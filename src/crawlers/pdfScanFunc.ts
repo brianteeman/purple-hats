@@ -15,7 +15,8 @@ import constants, {
   STATUS_CODE_METADATA,
   UrlsCrawled,
 } from '../constants/constants.js';
-import { cleanUpAndExit } from '../utils.js';
+import { cleanUpAndExit, getStoragePath } from '../utils.js';
+import { error } from 'console';
 
 const require = createRequire(import.meta.url);
 
@@ -258,61 +259,32 @@ export const handlePdfDownload = (
 
   pdfDownloads.push(
     new Promise<void>(async resolve => {
-      let bufs: Buffer[] = [];
       let buf: Buffer;
 
-      if (isFilePath(url)) {
-        // Read from local file system
-        const filePath = new URL(url).pathname;
-        const pdfResponse = fs.createReadStream(filePath, { encoding: 'binary' });
-
-        const downloadFile = fs.createWriteStream(`${randomToken}/${pdfFileName}.pdf`, {
-          flags: 'a',
-        });
-
-        pdfResponse.on('data', (chunk: Buffer) => {
-          downloadFile.write(chunk, 'binary');
-          bufs.push(Buffer.from(chunk));
-        });
-
-        pdfResponse.on('end', () => {
-          downloadFile.end();
-          buf = Buffer.concat(bufs);
-
-          if (isPDF(buf)) {
-            guiInfoLog(guiInfoStatusTypes.SCANNED, {
-              numScanned: urlsCrawled.scanned.length,
-              urlScanned: request.url,
-            });
-            urlsCrawled.scanned.push({
-              url: request.url,
-              pageTitle,
-              actualUrl: url,
-            });
-          } else {
+        // Download from remote URL
+        const response = await sendRequest({ responseType: 'buffer' });
+        if (response.statusCode !== 200) {
             guiInfoLog(guiInfoStatusTypes.SKIPPED, {
               numScanned: urlsCrawled.scanned.length,
               urlScanned: request.url,
             });
-            urlsCrawled.invalid.push({
+            urlsCrawled.userExcluded.push({
               url: request.url,
-              pageTitle: url,
-              actualUrl: url,
-              metadata: STATUS_CODE_METADATA[1],
+              pageTitle: request.url,
+              actualUrl: request.url, // because about:blank is not useful
+              metadata: STATUS_CODE_METADATA[response.statusCode] || STATUS_CODE_METADATA[1],
+              httpStatusCode: 0,
             });
-          }
 
           resolve();
-        });
-      } else {
-        // Download from remote URL
-        const response = await sendRequest({ responseType: 'buffer' });
+          return;
+        }
+
         buf = Buffer.isBuffer(response) ? response : response.body;
 
-        const downloadFile = fs.createWriteStream(`${randomToken}/${pdfFileName}.pdf`, {
-          flags: 'a',
+        const downloadFile = fs.createWriteStream(`${getStoragePath(randomToken)}/${pdfFileName}.pdf`, {
+          flags: 'w',
         });
-
         downloadFile.write(buf, 'binary');
         downloadFile.end();
 
@@ -335,11 +307,12 @@ export const handlePdfDownload = (
             url: request.url,
             pageTitle: url,
             actualUrl: url,
+            metadata: STATUS_CODE_METADATA[1],
           });
         }
 
         resolve();
-      }
+
     }),
   );
 
@@ -351,15 +324,14 @@ export const runPdfScan = async (randomToken: string) => {
   const veraPdfExe = `"${execFile}"`;
   // const veraPdfProfile = getVeraProfile();
   const veraPdfProfile = `"${path.join(
-    execFile,
-    '..',
+    path.dirname(execFile),
     'profiles/veraPDF-validation-profiles-rel-1.26/PDF_UA/WCAG-2-2.xml',
   )}"`;
   if (!veraPdfExe || !veraPdfProfile) {
     cleanUpAndExit(1);
   }
 
-  const intermediateFolder = randomToken; // NOTE: assumes this folder is already created for crawlee
+  const intermediateFolder = getStoragePath(randomToken);
 
   // store in a intermediate folder as we transfer final results later
   const intermediateResultPath = `${intermediateFolder}/${constants.pdfScanResultFileName}`;
@@ -382,7 +354,7 @@ export const mapPdfScanResults = async (
   randomToken: string,
   uuidToUrlMapping: Record<string, string>,
 ) => {
-  const intermediateFolder = randomToken;
+  const intermediateFolder = getStoragePath(randomToken);
   const intermediateResultPath = `${intermediateFolder}/${constants.pdfScanResultFileName}`;
 
   const rawdata = fs.readFileSync(intermediateResultPath, 'utf-8');
@@ -419,7 +391,7 @@ export const mapPdfScanResults = async (
         uuidToUrlMapping[fileNameWithoutExt] || // uuid-based key like 'a9f7ebbd-5a90...'
         `file://${fileName}`; // fallback
 
-      const filePath = `${randomToken}/${rawFileName}`;
+      const filePath = path.join(getStoragePath(randomToken), rawFileName);
 
 
       const pageTitle = decodeURI(url).split('/').pop();
@@ -496,7 +468,7 @@ const transformRule = async (
 export const doPdfScreenshots = async (randomToken: string, result: TranslatedObject) => {
   const { filePath, pageTitle } = result;
   const formattedPageTitle = pageTitle.replaceAll(' ', '_').split('.')[0];
-  const screenshotsDir = path.join(randomToken, 'elemScreenshots', 'pdf');
+  const screenshotsDir = path.join(getStoragePath(randomToken), 'elemScreenshots', 'pdf');
 
   ensureDirSync(screenshotsDir);
 
