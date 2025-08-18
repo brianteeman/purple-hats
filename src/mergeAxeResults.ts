@@ -1994,6 +1994,12 @@ const generateArtifacts = async (
     consoleLogger.warn(`Unable to force remove crawlee folder: ${error.message}`);
   }
 
+  try {
+    fs.rmSync(path.join(storagePath, 'pdfs'), { recursive: true, force: true });
+  } catch (error) {
+    consoleLogger.warn(`Unable to force remove pdfs folder: ${error.message}`);
+  }
+
   // Take option if set
   if (typeof zip === 'string') {
     constants.cliZipFileName = zip;
