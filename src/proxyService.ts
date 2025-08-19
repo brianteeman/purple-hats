@@ -96,42 +96,74 @@ function parseEnvProxyCommon(): ProxyInfo | null {
 }
 
 /* ============================ macOS Keychain ============================ */
-
-function securityExe(): string | null {
-  const abs = '/usr/bin/security';
-  return fs.existsSync(abs) ? abs : null;
-}
-
 /**
  * Try to read an Internet Password from macOS Keychain for a given host/account.
  * We intentionally avoid passing any user-controlled strings; host/account come from scutil.
  * Returns the password (raw) or undefined.
  */
-function keychainFindInternetPassword(host: string, account?: string): string | undefined {
-  const sec = securityExe();
-  if (!sec || !host) return undefined;
+export function keychainFindInternetPassword(host: string, account?: string): string | undefined {
+  console.log("Attempting to find internet proxy password in macOS keychain...");
+
+  // Only attempt on macOS, in an interactive session, or when explicitly allowed.
+  if (process.platform !== 'darwin') return undefined;
+  const allow = process.stdin.isTTY || process.env.ENABLE_KEYCHAIN_LOOKUP === '1';
+  if (!allow) return undefined;
+
+  const SECURITY_BIN = '/usr/bin/security';
+  const OUTPUT_LIMIT = 64 * 1024; // 64 KiB
+
+  // Verify absolute binary and realpath
+  try {
+    if (!fs.existsSync(SECURITY_BIN)) return undefined;
+    const real = fs.realpathSync(SECURITY_BIN);
+    if (real !== SECURITY_BIN) return undefined;
+  } catch {
+    return undefined;
+  }
+
+  // Minimal sanitized env (avoid proxy/env influence)
+  const env = {
+    PATH: '/usr/bin:/bin',
+    http_proxy: '', https_proxy: '', all_proxy: '', no_proxy: '',
+    HTTP_PROXY: '', HTTPS_PROXY: '', ALL_PROXY: '', NO_PROXY: '',
+    NODE_OPTIONS: '', NODE_PATH: '', DYLD_LIBRARY_PATH: '', LD_LIBRARY_PATH: '',
+  } as NodeJS.ProcessEnv;
 
   const baseArgs = ['find-internet-password', '-s', host, '-w'];
-  let attempt = spawnSync(sec, account ? [...baseArgs, '-a', account] : baseArgs, {
+  const args = account ? [...baseArgs, '-a', account] : baseArgs;
+
+  // No timeout: allow user to respond to Keychain prompt
+  const res = spawnSync(SECURITY_BIN, args, {
     encoding: 'utf8',
     windowsHide: true,
     shell: false,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
-  if (!attempt.error && attempt.status === 0 && attempt.stdout) {
-    return attempt.stdout.replace(/\r?\n$/, '');
+
+  if (!res.error && res.status === 0 && res.stdout) {
+    const out = res.stdout.slice(0, OUTPUT_LIMIT).replace(/\r?\n$/, '');
+    return out || undefined;
   }
 
-  // Retry without account if first attempt failed and we had specified one
+  // Retry without account if first try used one
   if (account) {
-    attempt = spawnSync(sec, baseArgs, {
+    const retry = spawnSync(SECURITY_BIN, baseArgs, {
       encoding: 'utf8',
       windowsHide: true,
       shell: false,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
-    if (!attempt.error && attempt.status === 0 && attempt.stdout) {
-      return attempt.stdout.replace(/\r?\n$/, '');
+    if (!retry.error && retry.status === 0 && retry.stdout) {
+      const out = retry.stdout.slice(0, OUTPUT_LIMIT).replace(/\r?\n$/, '');
+      return out || undefined;
     }
   }
+
+  // Common Keychain errors you may see in retry.stderr:
+  // - "User interaction is not allowed." (Keychain locked / non-interactive / no UI permission)
+  // - "The specified item could not be found in the keychain."
   return undefined;
 }
 
@@ -159,47 +191,46 @@ function parseMacScutil(): ProxyInfo | null {
   }
   if (map['ProxyAutoDiscoveryEnable'] === '1') info.autoDetect = true;
 
-  // Per-protocol credentials (Apple has used different keys across versions)
+  // Collect per-protocol creds (Apple keys vary by macOS version)
   const httpUser = pick(map, ['HTTPProxyUsername', 'HTTPUser', 'HTTPUsername']);
-  let   httpPass = pick(map, ['HTTPProxyPassword', 'HTTPPassword']); // may be missing
+  let   httpPass = pick(map, ['HTTPProxyPassword', 'HTTPPassword']);
   const httpsUser = pick(map, ['HTTPSProxyUsername', 'HTTPSUser', 'HTTPSUsername']);
   let   httpsPass = pick(map, ['HTTPSProxyPassword', 'HTTPSPassword']);
   const socksUser = pick(map, ['SOCKSProxyUsername', 'SOCKSUser', 'SOCKSUsername']);
   let   socksPass = pick(map, ['SOCKSProxyPassword', 'SOCKSPassword']);
 
-  // Manual proxies (host:port OR user:pass@host:port)
+  // Manual proxies (always set host:port only; never include creds)
   if (map['HTTPEnable'] === '1' && map['HTTPProxy'] && map['HTTPPort']) {
     const hostPort = `${map['HTTPProxy']}:${map['HTTPPort']}`;
+    info.http = hostPort;
     // If macOS has username but no password, try Keychain for this host/account
-    if (httpUser && !httpPass) {
-      httpPass = keychainFindInternetPassword(extractHost(hostPort), httpUser);
-    }
-    if (httpUser && httpPass) {
-      info.http = `${encodeURIComponent(httpUser)}:${encodeURIComponent(httpPass)}@${hostPort}`;
-    } else {
-      info.http = hostPort;
-    }
+    if (httpUser && !httpPass) httpPass = keychainFindInternetPassword(extractHost(hostPort), httpUser);
   }
+
   if (map['HTTPSEnable'] === '1' && map['HTTPSProxy'] && map['HTTPSPort']) {
     const hostPort = `${map['HTTPSProxy']}:${map['HTTPSPort']}`;
-    if (httpsUser && !httpsPass) {
-      httpsPass = keychainFindInternetPassword(extractHost(hostPort), httpsUser);
-    }
-    if (httpsUser && httpsPass) {
-      info.https = `${encodeURIComponent(httpsUser)}:${encodeURIComponent(httpsPass)}@${hostPort}`;
-    } else {
-      info.https = hostPort;
-    }
+    info.https = hostPort;
+    if (httpsUser && !httpsPass) httpsPass = keychainFindInternetPassword(extractHost(hostPort), httpsUser);
   }
+
   if (map['SOCKSEnable'] === '1' && map['SOCKSProxy'] && map['SOCKSPort']) {
     const hostPort = `${map['SOCKSProxy']}:${map['SOCKSPort']}`;
-    if (socksUser && !socksPass) {
-      socksPass = keychainFindInternetPassword(extractHost(hostPort), socksUser);
-    }
-    if (socksUser && socksPass) {
-      info.socks = `${encodeURIComponent(socksUser)}:${encodeURIComponent(socksPass)}@${hostPort}`;
-    } else {
-      info.socks = hostPort;
+    info.socks = hostPort;
+    if (socksUser && !socksPass) socksPass = keychainFindInternetPassword(extractHost(hostPort), socksUser);
+  }
+
+  // Choose one set of creds to expose globally: prefer HTTP, else HTTPS, else SOCKS
+  // (Do not overwrite if env already provided username/password.)
+  if (!info.username && !info.password) {
+    if (httpUser && httpPass) {
+      info.username = httpUser;
+      info.password = httpPass;
+    } else if (httpsUser && httpsPass) {
+      info.username = httpsUser;
+      info.password = httpsPass;
+    } else if (socksUser && socksPass) {
+      info.username = socksUser;
+      info.password = socksPass;
     }
   }
 
@@ -217,9 +248,12 @@ function parseMacScutil(): ProxyInfo | null {
   if (bypassList) info.bypassList = bypassList;
 
   // If scutil did not provide creds anywhere, still allow env creds as global fallback
-  if (!hasUserinfo(info.http || '') || !hasUserinfo(info.https || '') || !hasUserinfo(info.socks || '')) {
-    const { username, password } = readCredsFromEnv();
-    if (username && password) { info.username = username; info.password = password; }
+  if ((!info.username || !info.password)) {
+    const envCreds = readCredsFromEnv();
+    if (envCreds.username && envCreds.password) {
+      info.username = info.username || envCreds.username;
+      info.password = info.password || envCreds.password;
+    }
   }
 
   return (info.pacUrl || info.http || info.https || info.socks || info.autoDetect || info.bypassList) ? info : null;
