@@ -2008,9 +2008,10 @@ const generateArtifacts = async (
       constants.cliZipFileName += '.zip';
     }
 
-    if (!path.isAbsolute(constants.cliZipFileName)) {
-      constants.cliZipFileName = path.join(storagePath, constants.cliZipFileName);
-    }
+  }
+
+  if (!path.isAbsolute(constants.cliZipFileName) || path.dirname(constants.cliZipFileName) === '.') {
+    constants.cliZipFileName = path.join(storagePath, constants.cliZipFileName);
   }
 
   await fs
