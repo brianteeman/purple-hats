@@ -33,7 +33,7 @@ import { isUrlPdf } from '../crawlers/commonCrawlerFunc.js';
 import { cleanUpAndExit, randomThreeDigitNumberString, register } from '../utils.js';
 import { Answers, Data } from '../index.js';
 import { DeviceDescriptor } from '../types/types.js';
-import { getProxyInfo, proxyInfoToArgs } from '../proxyService.js';
+import { getProxyInfo, proxyInfoToResolution, ProxySettings } from '../proxyService.js';
 
 // validateDirPath validates a provided directory path
 // returns null if no error
@@ -304,6 +304,7 @@ const checkUrlConnectivityWithBrowser = async (
       ignoreHTTPSErrors: true,
       ...getPlaywrightLaunchOptions(browserToRun),
       ...playwrightDeviceDetailsObject,
+      ...(process.env.OOBEE_DISABLE_BROWSER_DOWNLOAD && { acceptDownloads: false }),
     });
 
     register(browserContext);
@@ -1722,61 +1723,61 @@ export async function initModifiedUserAgent(
   // console.log('Modified User Agent:', modifiedUA);
 }
 
+const cacheProxyInfo = getProxyInfo();
+
 /**
  * @param {string} browser browser name ("chrome" or "edge", null for chromium, the default Playwright browser)
  * @returns playwright launch options object. For more details: https://playwright.dev/docs/api/class-browsertype#browser-type-launch
  */
 export const getPlaywrightLaunchOptions = (browser?: string): LaunchOptions => {
-  let channel: string;
-  if (browser) {
-    channel = browser;
-  }
+  const channel = browser || undefined;
 
-  if (!constants.launchOptionsArgs.find(arg => arg.startsWith('--proxy'))) {
-    // Inject system proxy flags (single source of truth).
-    const proxyArgs = proxyInfoToArgs(getProxyInfo());    
-    constants.launchOptionsArgs.push(...proxyArgs);
+  const resolution = proxyInfoToResolution(cacheProxyInfo);
 
-    // console.log('Injected proxy arguments:', proxyArgs);
-  }
-  
-  // Set new headless mode as Chrome 132 does not support headless=old
-  // Also mute audio
+  // Start with your base args
+  const finalArgs = [...constants.launchOptionsArgs];
+
+  // Headless flags (unchanged)
   if (process.env.CRAWLEE_HEADLESS === '1') {
-    if (!constants.launchOptionsArgs.includes('--headless=new')) {
-      constants.launchOptionsArgs.push('--headless=new');
+    if (!finalArgs.includes('--headless=new')) finalArgs.push('--headless=new');
+    if (!finalArgs.includes('--mute-audio')) finalArgs.push('--mute-audio');
+  }
+
+  // Map resolution to Playwright options
+  let proxyOpt: ProxySettings | undefined;
+  switch (resolution.kind) {
+    case 'manual':
+      proxyOpt = resolution.settings;
+      break;
+    case 'pac': {
+      finalArgs.push(`--proxy-pac-url=${resolution.pacUrl}`);
+      if (resolution.bypass) finalArgs.push(`--proxy-bypass-list=${resolution.bypass}`);
+      break;
     }
-    if (!constants.launchOptionsArgs.includes('--mute-audio')) {
-      constants.launchOptionsArgs.push('--mute-audio');
-    }
+    case 'none':
+      // nothing
+      break;
   }
 
   const options: LaunchOptions = {
-    // Drop the --use-mock-keychain flag to allow MacOS devices
-    // to use the cloned cookies.
     ignoreDefaultArgs: ['--use-mock-keychain', '--headless'],
-    // necessary from Chrome 132 to use our own headless=new flag
-    args: constants.launchOptionsArgs,
+    args: finalArgs,
     headless: false,
-    ...(channel && { channel }), // Having no channel is equivalent to "chromium"
+    ...(channel && { channel }),
+    ...(proxyOpt ? { proxy: proxyOpt } : {}),
   };
 
-  // Necessary as Chrome 132 does not support headless=old
-  options.headless = false;
-
-  // Experimental: Slow down to wait for server-side rendering, useful in proxied environment. Value of 1000 ms recommended
-  if (!options.slowMo && 
-      process.env.OOBEE_SLOWMO &&
-      Number(process.env.OOBEE_SLOWMO) >= 1
-    ) {
+  // SlowMo (unchanged)
+  if (!options.slowMo && process.env.OOBEE_SLOWMO && Number(process.env.OOBEE_SLOWMO) >= 1) {
     options.slowMo = Number(process.env.OOBEE_SLOWMO);
     consoleLogger.info(`Enabled browser slowMo with value: ${process.env.OOBEE_SLOWMO}ms`);
   }
 
+  // Edge on Windows should not be headless (unchanged)
   if (browser === BrowserTypes.EDGE && os.platform() === 'win32') {
-    // edge should be in non-headless mode
     options.headless = false;
   }
+
   return options;
 };
 

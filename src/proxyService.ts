@@ -31,6 +31,19 @@ export interface ProxyInfo {
   password?: string;
 }
 
+export interface ProxySettings {
+  server: string;
+  username?: string;
+  password?: string;
+  bypass?: string;
+}
+
+// New discriminated union that the launcher can switch on
+export type ProxyResolution =
+  | { kind: 'manual'; settings: ProxySettings }   // Playwright proxy option
+  | { kind: 'pac'; pacUrl: string; bypass?: string } // Use --proxy-pac-url
+  | { kind: 'none' };    
+
 /* ============================ helpers ============================ */
 
 function stripScheme(u: string): string {
@@ -48,14 +61,6 @@ function readCredsFromEnv(): { username?: string; password?: string } {
 }
 function hasUserinfo(v: string | undefined): boolean {
   return !!(v && /@/.test(v.split('/')[0]));
-}
-function withCreds(valueHostPort: string, scheme: 'http'|'https'|'socks5', username?: string, password?: string): string {
-  if (!username || !password || hasUserinfo(valueHostPort)) {
-    return `${scheme}://${valueHostPort}`;
-  }
-  const u = encodeURIComponent(username);
-  const p = encodeURIComponent(password);
-  return `${scheme}://${u}:${p}@${valueHostPort}`;
 }
 function pick(map: Record<string, string>, keys: string[]): string | undefined {
   for (const k of keys) {
@@ -323,54 +328,42 @@ export function getProxyInfo(): ProxyInfo | null {
   return parseEnvProxyCommon(); // Linux/others
 }
 
-export function proxyInfoToArgs(info: ProxyInfo | null): string[] {
-  if (!info) return [];
+export function proxyInfoToResolution(info: ProxyInfo | null): ProxyResolution {
+  if (!info) return { kind: 'none' };
 
-  // 1) PAC takes precedence
-  if (info.pacUrl) {
-    const args = [`--proxy-pac-url=${info.pacUrl}`];
-    if (info.bypassList) args.push(`--proxy-bypass-list=${info.bypassList}`);
-    return args;
-  }
-
-  // 2) Manual proxies
-  const parts: string[] = [];
-  const haveGlobalCreds = !!(info.username && info.password);
-
+  // Prefer manual proxies first (these work with Playwright's proxy option)
   if (info.http) {
-    parts.push(
-      haveGlobalCreds
-        ? `http=${withCreds(info.http, 'http', info.username, info.password)}`
-        : `http=${hasUserinfo(info.http) ? `http://${info.http}` : info.http}`
-    );
+    return { kind: 'manual', settings: {
+      server: `http://${info.http}`,
+      username: info.username,
+      password: info.password,
+      bypass: info.bypassList,
+    }};
   }
   if (info.https) {
-    parts.push(
-      haveGlobalCreds
-        ? `https=${withCreds(info.https, 'https', info.username, info.password)}`
-        : `https=${hasUserinfo(info.https) ? `https://${info.https}` : info.https}`
-    );
+    return { kind: 'manual', settings: {
+      server: `http://${info.https}`,
+      username: info.username,
+      password: info.password,
+      bypass: info.bypassList,
+    }};
   }
   if (info.socks) {
-    parts.push(
-      haveGlobalCreds
-        ? `socks5=${withCreds(info.socks, 'socks5', info.username, info.password)}`
-        : `socks5=${hasUserinfo(info.socks) ? `socks5://${info.socks}` : info.socks}`
-    );
+    return { kind: 'manual', settings: {
+      server: `socks5://${info.socks}`,
+      username: info.username,
+      password: info.password,
+      bypass: info.bypassList,
+    }};
   }
 
-  if (parts.length > 0) {
-    const args = [`--proxy-server=${parts.join(';')}`];
-    if (info.bypassList) args.push(`--proxy-bypass-list=${info.bypassList}`);
-    return args;
+  // PAC → handle via Chromium args; do NOT try proxy.server = 'pac+...'
+  if (info.pacUrl) {
+    // Minor hardening: prefer 127.0.0.1 over localhost for loopback PAC
+    const pacUrl = info.pacUrl.replace('://localhost', '://127.0.0.1');
+    return { kind: 'pac', pacUrl, bypass: info.bypassList };
   }
 
-  // 3) Autodetect
-  if (info.autoDetect) {
-    const args = ['--proxy-auto-detect'];
-    if (info.bypassList) args.push(`--proxy-bypass-list=${info.bypassList}`);
-    return args;
-  }
-
-  return [];
+  // Auto-detect not supported directly
+  return { kind: 'none' };
 }
