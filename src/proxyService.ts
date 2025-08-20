@@ -359,7 +359,7 @@ function parseWindowsRegistry(): ProxyInfo | null {
 
 export function getProxyInfo(): ProxyInfo | null {
   const plat = os.platform();
-  if (plat === 'win32') return parseWindowsRegistry();
+  if (plat === 'win32') return parseEnvProxyCommon() || parseWindowsRegistry();
   if (plat === 'darwin') return parseEnvProxyCommon() || parseMacScutil();
   return parseEnvProxyCommon(); // Linux/others
 }
