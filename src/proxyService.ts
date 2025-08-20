@@ -317,14 +317,16 @@ function parseWindowsRegistry(): ProxyInfo | null {
   if (!v) return null;
 
   const info: ProxyInfo = {};
-  const enabled = v.ProxyEnable && v.ProxyEnable !== '0';
+  const enabledManual = !!v.ProxyEnable && v.ProxyEnable !== '0' && v.ProxyEnable.toLowerCase() !== '0x0';
+  const enabledAuto   = !!v.AutoDetect && v.AutoDetect !== '0' && v.AutoDetect.toLowerCase() !== '0x0';
+  const anyEnabled    = enabledManual || enabledAuto || !!v.AutoConfigURL;
 
-  // PAC + autodetect
-  if (v.AutoConfigURL) info.pacUrl = v.AutoConfigURL;
-  if (v.AutoDetect && v.AutoDetect !== '0') info.autoDetect = true;
+  // PAC + autodetect (only when something is actually enabled)
+  if (v.AutoConfigURL) info.pacUrl = v.AutoConfigURL.trim(); // PAC stands on its own
+  if (enabledAuto) info.autoDetect = true;                    // autodetect still gated
 
   // Manual proxies
-  if (enabled && v.ProxyServer) {
+  if (enabledManual && v.ProxyServer) {
     const s = v.ProxyServer.trim();
     if (s.includes('=')) {
       for (const part of s.split(';')) {
@@ -344,7 +346,7 @@ function parseWindowsRegistry(): ProxyInfo | null {
   }
 
   // Bypass list
-  if (v.ProxyOverride) info.bypassList = semiJoin(v.ProxyOverride.split(/[,;]/));
+  if (anyEnabled && v.ProxyOverride) info.bypassList = semiJoin(v.ProxyOverride.split(/[,;]/));
 
   // Env creds as global fallback (Windows does not store proxy creds in ProxyServer)
   const { username, password } = readCredsFromEnv();
