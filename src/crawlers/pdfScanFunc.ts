@@ -288,30 +288,31 @@ export const handlePdfDownload = (
         downloadFile.write(buf, 'binary');
         downloadFile.end();
 
-        if (isPDF(buf)) {
-          guiInfoLog(guiInfoStatusTypes.SCANNED, {
-            numScanned: urlsCrawled.scanned.length,
-            urlScanned: request.url,
-          });
-          urlsCrawled.scanned.push({
-            url: request.url,
-            pageTitle,
-            actualUrl: url,
-          });
-        } else {
-          guiInfoLog(guiInfoStatusTypes.SKIPPED, {
-            numScanned: urlsCrawled.scanned.length,
-            urlScanned: request.url,
-          });
-          urlsCrawled.invalid.push({
-            url: request.url,
-            pageTitle: url,
-            actualUrl: url,
-            metadata: STATUS_CODE_METADATA[1],
-          });
-        }
-
-        resolve();
+        downloadFile.on('finish', () => {
+          if (isPDF(buf)) {
+            guiInfoLog(guiInfoStatusTypes.SCANNED, {
+              numScanned: urlsCrawled.scanned.length,
+              urlScanned: request.url,
+            });
+            urlsCrawled.scanned.push({
+              url: request.url,
+              pageTitle,
+              actualUrl: url,
+            });
+          } else {
+            guiInfoLog(guiInfoStatusTypes.SKIPPED, {
+              numScanned: urlsCrawled.scanned.length,
+              urlScanned: request.url,
+            });
+            urlsCrawled.invalid.push({
+              url: request.url,
+              pageTitle: url,
+              actualUrl: url,
+              metadata: STATUS_CODE_METADATA[1],
+            });
+          }
+          resolve();
+        });
 
     }),
   );
@@ -346,6 +347,9 @@ export const runPdfScan = async (randomToken: string) => {
   ];
 
   const ls = spawnSync(veraPdfExe, veraPdfCmdArgs, { shell: true });
+  if (ls.stderr && ls.stderr.length > 0)
+    consoleLogger.error(ls.stderr.toString());
+
   fs.writeFileSync(intermediateResultPath, ls.stdout, { encoding: 'utf-8' });
 };
 
@@ -363,7 +367,7 @@ export const mapPdfScanResults = async (
   try {
     parsedJsonData = JSON.parse(rawdata);
   } catch (err) {
-    consoleLogger.log(err);
+    consoleLogger.error(err);
   }
 
   const errorMeta = require('../constants/errorMeta.json');

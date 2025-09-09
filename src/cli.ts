@@ -211,18 +211,19 @@ Usage: npm run cli -- -c <crawler> -d <device> -w <viewport> -u <url> OPTIONS`,
   .parse() as unknown as Answers;
 
 const scanInit = async (argvs: Answers): Promise<string> => {
-  let isCustomFlow = false;
-  if (argvs.scanner === ScannerTypes.CUSTOM) {
-    isCustomFlow = true;
-  }
-
   const updatedArgvs = { ...argvs };
 
   // Cannot use data.browser and data.isHeadless as the connectivity check comes first before prepareData
   setHeadlessMode(updatedArgvs.browserToRun, updatedArgvs.headless);
   const statuses = constants.urlCheckStatuses;
 
-  const data = await prepareData(updatedArgvs);
+  let data;
+  try {
+    data = await prepareData(updatedArgvs);
+  } catch (e) {
+    consoleLogger.error(`Error preparing data: ${e.message}\n${e.stack}`);
+    cleanUpAndExit(1);
+  }
 
   // Executes cleanUp script if error encountered
   listenForCleanUp(data.randomToken);
@@ -233,7 +234,8 @@ const scanInit = async (argvs: Answers): Promise<string> => {
     data.browser,
     data.userDataDirectory,
     data.playwrightDeviceDetailsObject,
-    data.extraHTTPHeaders
+    data.extraHTTPHeaders,
+    data.fileTypes
   );
 
   if (res.httpStatus) consoleLogger.info(`Connectivity Check HTTP Response Code: ${res.httpStatus}`);
@@ -252,16 +254,19 @@ const scanInit = async (argvs: Answers): Promise<string> => {
       printMessage([statuses.unauthorised.message], messageOptions);
       consoleLogger.info(statuses.unauthorised.message);
       cleanUpAndExit(res.status);
+      return;
     }
     case statuses.cannotBeResolved.code: {
       printMessage([statuses.cannotBeResolved.message], messageOptions);
       consoleLogger.info(statuses.cannotBeResolved.message);
       cleanUpAndExit(res.status);
+      return;
     }
     case statuses.systemError.code: {
       printMessage([statuses.systemError.message], messageOptions);
       consoleLogger.info(statuses.systemError.message);
       cleanUpAndExit(res.status);
+      return;
     }
     case statuses.invalidUrl.code: {
       if (
@@ -291,25 +296,34 @@ const scanInit = async (argvs: Answers): Promise<string> => {
         consoleLogger.info(statuses.notASitemap.message);
         cleanUpAndExit(statuses.notASitemap.code);
       }
-      break;
+      return;
     }
     case statuses.notASitemap.code: {
       printMessage([statuses.notASitemap.message], messageOptions);
       consoleLogger.info(statuses.notASitemap.message);
       cleanUpAndExit(res.status);
+      return;
     }
     case statuses.notALocalFile.code: {
       printMessage([statuses.notALocalFile.message], messageOptions);
       consoleLogger.info(statuses.notALocalFile.message);
       cleanUpAndExit(res.status);
+      return;
+    }
+    case statuses.notAPdf.code: {
+      printMessage([statuses.notAPdf.message], messageOptions);
+      consoleLogger.info(statuses.notAPdf.message);
+      cleanUpAndExit(res.status);
+      return;
     }
     case statuses.browserError.code: {
       printMessage([statuses.browserError.message], messageOptions);
       consoleLogger.info(statuses.browserError.message);
       cleanUpAndExit(res.status);
+      return;
     }
     default:
-      break;
+      return;
   }
 
   if (process.env.OOBEE_VERBOSE) {
