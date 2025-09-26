@@ -631,6 +631,7 @@ the module (for instance, using `npm rebuild` or `npm install`).
 export OOBEE_VERBOSE=1
 ```
 #### On Windows
+```
 $env:OOBEE_VERBOSE=1
 ```
 
