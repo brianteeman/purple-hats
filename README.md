@@ -612,7 +612,7 @@ the module (for instance, using `npm rebuild` or `npm install`).
 
 **Solution**: As recommended in the error message, run `npm rebuild` or `npm install`
 
-### dyld Error
+### Oobee Exits Without An Error
 
 **Issue**: Oobee does not start a scan as shown below
 
