@@ -614,24 +614,35 @@ the module (for instance, using `npm rebuild` or `npm install`).
 
 ### dyld Error
 
-**Issue**: Not able to run Oobee due to the following error shown below
+**Issue**: Oobee does not start a scan as shown below
 
 ```shell
-dyld: lazy symbol binding failed: Symbol not found: __ZN2v87Isolate37AdjustAmountOfExternalAllocatedMemoryEx
-  Referenced from: <user_path>/oobee/node_modules/libxmljs/build/Release/xmljs.node
-  Expected in: flat namespace
-
-dyld: Symbol not found: __ZN2v87Isolate37AdjustAmountOfExternalAllocatedMemoryEx
-  Referenced from: <user_path>/PURPLE_A11y/oobee/node_modules/libxmljs/build/Release/xmljs.node
-  Expected in: flat namespace
-
-zsh: abort      node index.js
+> @govtechsg/oobee@0.10.68 cli
+> node --max-old-space-size=10000 dist/cli.js -c -u https://example.com
 ```
 
 **Solutions**:
 
-1. Delete existing `node_modules` folder and re-install the NPM packages with `npm install`.
-2. Refer to this [GitHub issue](https://github.com/fsevents/fsevents/issues/313) for more alternative solutions
+1. Delete existing `node_modules` folder and re-install the npm packages with `npm install`.
+
+2. Set Oobee Verbose mode so more errors are shown during a scan 
+#### On MacOS:
+```
+export OOBEE_VERBOSE=1
+```
+#### On Windows
+$env:OOBEE_VERBOSE=1
+```
+
+3. Re-run a scan and see if the issue is resolved.
+
+4. Get the error log information. Error log is available at the log file that is written to `<uuid>.txt`
+```
+{"timestamp":"2025-09-26 11:13:57","level":"info","message":"Logger writing to: /Users/.../Oobee/...txt"}
+```
+
+5. Open an issue (https://github.com/GovTechSG/oobee/issues). Describe the steps of the problem and paste a copy of the error log.
+
 
 ### Element Screenshot Limitation
 
