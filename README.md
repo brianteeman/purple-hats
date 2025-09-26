@@ -642,7 +642,7 @@ $env:OOBEE_VERBOSE=1
 {"timestamp":"2025-09-26 11:13:57","level":"info","message":"Logger writing to: /Users/.../Oobee/...txt"}
 ```
 
-5. Open an issue (https://github.com/GovTechSG/oobee/issues). Describe the steps of the problem and paste a copy of the error log.
+5. Open an [https://github.com/GovTechSG/oobee/issues](issue). Describe the steps to the problem and paste a copy of the error log.
 
 
 ### Element Screenshot Limitation
