@@ -835,10 +835,24 @@ const writeJsonAndBase64Files = async (
 
   // Refactor scanIssuesSummary to reuse the scanItemsMiniReport structure by stripping out pagesAffected
   const scanIssuesSummary = {
-    mustFix: items.mustFix.rules.map(({ pagesAffected, ...ruleInfo }) => ruleInfo),
-    goodToFix: items.goodToFix.rules.map(({ pagesAffected, ...ruleInfo }) => ruleInfo),
-    needsReview: items.needsReview.rules.map(({ pagesAffected, ...ruleInfo }) => ruleInfo),
-    passed: items.passed.rules.map(({ pagesAffected, ...ruleInfo }) => ruleInfo),
+
+    // Replace rule descriptions with short descriptions from the map
+    mustFix: items.mustFix.rules.map(({ pagesAffected, ...ruleInfo }) => ({
+      ...ruleInfo,
+      description: a11yRuleShortDescriptionMap[ruleInfo.rule] || ruleInfo.description,
+    })),
+    goodToFix: items.goodToFix.rules.map(({ pagesAffected, ...ruleInfo }) => ({
+      ...ruleInfo,
+      description: a11yRuleShortDescriptionMap[ruleInfo.rule] || ruleInfo.description,
+    })),
+    needsReview: items.needsReview.rules.map(({ pagesAffected, ...ruleInfo }) => ({
+      ...ruleInfo,
+      description: a11yRuleShortDescriptionMap[ruleInfo.rule] || ruleInfo.description,
+    })),
+    passed: items.passed.rules.map(({ pagesAffected, ...ruleInfo }) => ({
+      ...ruleInfo,
+      description: a11yRuleShortDescriptionMap[ruleInfo.rule] || ruleInfo.description,
+    })),
   };
 
   // Write out the scanIssuesSummary JSON using the new structure
@@ -1200,7 +1214,8 @@ const getTopTenIssues = allIssues => {
       rulesWithCounts.push({
         category,
         ruleId: rule.rule,
-        description: rule.description,
+        // Replace description with new Oobee short description if available
+        description: a11yRuleShortDescriptionMap[rule.rule] || rule.description,
         axeImpact: rule.axeImpact,
         conformance: rule.conformance,
         totalItems: rule.totalItems,
