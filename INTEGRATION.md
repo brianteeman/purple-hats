@@ -441,8 +441,8 @@ Scans one or more Playwright Page objects. This injects the Oobee engine into th
 
 - `pages`: A Playwright `Page` object or an array of `Page` objects.
 - `config`: Configuration object
-  - `name`: Name for report (required)
-  - `email`: Email for report (required)
+  - `name`: Name for results (required)
+  - `email`: Email for results (required)
   - `pageTitle`: Optional override for page title (only applied if scanning a single page)
   - `metadata`: Optional metadata string
   - `ruleset`: Optional array of `RuleFlags` (e.g. `['enable-wcag-aaa', 'disable-oobee']`)
@@ -459,8 +459,8 @@ Scans raw HTML string(s). Note that this runs in a JSDOM environment (NodeJS) us
 
 - `htmlContent`: HTML string or array of HTML strings.
 - `config`: Configuration object
-  - `name`: Name for report (required)
-  - `email`: Email for report (required)
+  - `name`: Name for results (required)
+  - `email`: Email for results (required)
   - `pageUrl`: Optional URL identifier for the report (defaults to 'raw-html')
   - `pageTitle`: Optional title identifier (defaults to 'HTML Content')
   - `metadata`: Optional metadata string
