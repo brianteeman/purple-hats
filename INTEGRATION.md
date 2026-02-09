@@ -468,4 +468,4 @@ Scans raw HTML string(s). Note that this runs in a JSDOM environment (NodeJS) us
 
 **Returns:**
 
-- Scan results object containing categorized violations and pass counts.
+- Scan results object containing categorized violations (mustFix, goodToFux, needsReview).
