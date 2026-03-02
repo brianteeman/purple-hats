@@ -838,14 +838,18 @@ const getRobotsTxtViaPlaywright = async (
       });
       register(browserContext);
     } else {
-      browserInstance = await constants.launcher.launch(getPlaywrightLaunchOptions(browser));
+      // In headful mode, avoid launchPersistentContext with custom user data dir to prevent "Browser window not found"
+      const launchOptions = getPlaywrightLaunchOptions(browser);
+      browserInstance = await constants.launcher.launch(launchOptions);
       register(browserInstance as unknown as { close: () => Promise<void> });
+      
       browserContext = await browserInstance.newContext({
         ...(extraHTTPHeaders && { extraHTTPHeaders }),
       });
     }
 
     const page = await browserContext.newPage();
+
     await page.goto(robotsUrl, { waitUntil: 'networkidle', timeout: 30000 });
     const robotsTxt: string | null = await page.evaluate(() => document.body.textContent);
     return robotsTxt;
@@ -1013,43 +1017,63 @@ export const getLinksFromSitemap = async (
     }
 
     const getDataUsingPlaywright = async () => {
-      const browserContext = await constants.launcher.launchPersistentContext(
-        finalUserDataDirectory,
-        {
-          ...getPlaywrightLaunchOptions(browser),
-          // Not necessary to parse http_credentials as I am parsing it directly in URL
-          // Bug in Chrome which causes browser pool crash when userDataDirectory is set in non-headless mode
-          ...(process.env.CRAWLEE_HEADLESS === '1' && { userDataDir: userDataDirectory }),
-          ...(extraHTTPHeaders && { extraHTTPHeaders }),
-        },
-      );
+      let browserContext;
+      let browserInstance;
 
-      register(browserContext);
-      const page = await browserContext.newPage();
+      try {
+        if (process.env.CRAWLEE_HEADLESS === '1') {
+          browserContext = await constants.launcher.launchPersistentContext(
+            finalUserDataDirectory,
+            {
+              ...getPlaywrightLaunchOptions(browser),
+              // Not necessary to parse http_credentials as I am parsing it directly in URL
+              // Bug in Chrome which causes browser pool crash when userDataDirectory is set in non-headless mode
+              ...(process.env.CRAWLEE_HEADLESS === '1' && { userDataDir: userDataDirectory }),
+              ...(extraHTTPHeaders && { extraHTTPHeaders }),
+            },
+          );
 
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+          register(browserContext);
+        } else {
+          // In headful mode, avoid launchPersistentContext with custom user data dir to prevent "Browser window not found"
+          const launchOptions = getPlaywrightLaunchOptions(browser);
+          browserInstance = await constants.launcher.launch(launchOptions);
+          register(browserInstance as unknown as { close: () => Promise<void> });
+          
+          browserContext = await browserInstance.newContext({
+            ...(extraHTTPHeaders && { extraHTTPHeaders }),
+          });
+        }
 
-      if ((await page.locator('body').count()) > 0) {
-        data = await page.locator('body').innerText();
-      } else {
-        const urlSet = page.locator('urlset');
-        const sitemapIndex = page.locator('sitemapindex');
-        const rss = page.locator('rss');
-        const feed = page.locator('feed');
-        const isRoot = async (locator: Locator) => (await locator.count()) > 0;
+        const page = await browserContext.newPage();
 
-        if (await isRoot(urlSet)) {
-          data = await urlSet.evaluate(elem => elem.outerHTML);
-        } else if (await isRoot(sitemapIndex)) {
-          data = await sitemapIndex.evaluate(elem => elem.outerHTML);
-        } else if (await isRoot(rss)) {
-          data = await rss.evaluate(elem => elem.outerHTML);
-        } else if (await isRoot(feed)) {
-          data = await feed.evaluate(elem => elem.outerHTML);
+        await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+
+        if ((await page.locator('body').count()) > 0) {
+          data = await page.locator('body').innerText();
+        } else {
+          const urlSet = page.locator('urlset');
+          const sitemapIndex = page.locator('sitemapindex');
+          const rss = page.locator('rss');
+          const feed = page.locator('feed');
+          const isRoot = async (locator: Locator) => (await locator.count()) > 0;
+
+          if (await isRoot(urlSet)) {
+            data = await urlSet.evaluate(elem => elem.outerHTML);
+          } else if (await isRoot(sitemapIndex)) {
+            data = await sitemapIndex.evaluate(elem => elem.outerHTML);
+          } else if (await isRoot(rss)) {
+            data = await rss.evaluate(elem => elem.outerHTML);
+          } else if (await isRoot(feed)) {
+            data = await feed.evaluate(elem => elem.outerHTML);
+          }
+        }
+      } finally {
+        await browserContext?.close();
+        if (browserInstance) {
+          await browserInstance.close();
         }
       }
-
-      await browserContext.close();
     };
 
     if (validator.isURL(url, urlOptions)) {
