@@ -379,16 +379,31 @@ const checkUrlConnectivityWithBrowser = async (
   contextOptions.userAgent = process.env.OOBEE_USER_AGENT || (deviceUserAgent as string | undefined);
 
   try {
-    if (process.env.CRAWLEE_HEADLESS === '1') {
+    const launchPersistent = async () => {
       browserContext = await constants.launcher.launchPersistentContext(clonedDataDir, {
         ...launchOptions,
         ...contextOptions,
       });
       register(browserContext);
-    } else {
+    };
+
+    const launchEphemeral = async () => {
       browserInstance = await constants.launcher.launch(launchOptions);
       register(browserInstance as unknown as { close: () => Promise<void> });
       browserContext = await browserInstance.newContext(contextOptions);
+    };
+
+    if (process.env.CRAWLEE_HEADLESS === '1') {
+      try {
+        await launchPersistent();
+      } catch (error) {
+        // Fallback to ephemeral context if persistent context fails (e.g. protocol errors)
+        // More prone to falling back here when running localFile scans
+        consoleLogger.warn(`Persistent context launch failed, retrying with ephemeral context: ${error.message}`);
+        await launchEphemeral();
+      }
+    } else {
+      await launchEphemeral();
     }
   } catch (err) {
     printMessage([`Unable to launch browser\n${err}`], messageOptions);
