@@ -110,6 +110,9 @@
       "minimatch": {
         "brace-expansion": "^5.0.4"
       }
+    },
+    "minimatch": {
+      "brace-expansion": "^5.0.4"
     }
   },
   "optionalDependencies": {
