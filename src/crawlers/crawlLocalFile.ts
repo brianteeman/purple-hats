@@ -19,8 +19,7 @@ import {
 import { runPdfScan, mapPdfScanResults, doPdfScreenshots } from './pdfScanFunc.js';
 import { guiInfoLog } from '../logs.js';
 import crawlSitemap from './crawlSitemap.js';
-import { register } from '../utils.js';
-import { getPdfStoragePath } from '../utils/index.js';
+import { getPdfStoragePath, getStoragePath, register } from '../utils.js';
 
 export const crawlLocalFile = async ({
   url,

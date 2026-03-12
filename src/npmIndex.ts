@@ -13,8 +13,7 @@ import {
   submitForm,
 } from './constants/common.js';
 import { createCrawleeSubFolders, filterAxeResults } from './crawlers/commonCrawlerFunc.js';
-import { createAndUpdateResultsFolders } from './utils.js';
-import { getVersion } from './utils/index.js';
+import { createAndUpdateResultsFolders, getVersion } from './utils.js';
 import generateArtifacts, { createBasicFormHTMLSnippet, sendWcagBreakdownToSentry } from './mergeAxeResults.js';
 import { takeScreenshotForHTMLElements } from './screenshotFunc/htmlScreenshotFunc.js';
 import { consoleLogger, silentLogger } from './logs.js';
@@ -879,3 +878,4 @@ export const scanPage = async (
 };
 
 export { RuleFlags };
+
