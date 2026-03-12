@@ -159,7 +159,8 @@ const crawlDomain = async ({
   ): Promise<void> => {
     let workingPage = currentPage;
     const initialPageUrl: string = workingPage.url().toString();
-
+    const selectedElementsString = cssQuerySelectors.join(', ');
+    
     const isExcluded = (newPageUrl: string): boolean => {
       const isAlreadyScanned: boolean = urlsCrawled.scanned.some(item => item.url === newPageUrl);
       const isBlacklistedUrl: boolean = isBlacklisted(newPageUrl, blacklistedPatterns);
@@ -239,7 +240,6 @@ const crawlDomain = async ({
           });
           setPageListeners(workingPage);
         }
-        const selectedElementsString = cssQuerySelectors.join(', ');
         const selectedElements: ElementHandle<SVGElement | HTMLElement>[] =
           await workingPage.$$(selectedElementsString);
         // edge case where there might be elements on page that appears intermittently
