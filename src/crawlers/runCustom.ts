@@ -80,7 +80,7 @@ const runCustom = async (
     const deviceConfig = viewportSettings.playwrightDeviceDetailsObject;
     const hasCustomViewport = !!deviceConfig;
 
-    const baseLaunchOptions = getPlaywrightLaunchOptions('chrome');
+    const baseLaunchOptions = getPlaywrightLaunchOptions();
 
     // Merge base args with custom flow specific args
     const baseArgs = baseLaunchOptions.args || [];
@@ -91,7 +91,6 @@ const runCustom = async (
       ...baseLaunchOptions,
       args: mergedArgs,
       headless: false,
-      channel: 'chrome',
     });
 
     const context = await browser.newContext({
