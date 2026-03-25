@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
   release:
     types: [published]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,6 +21,14 @@ jobs:
 
       - run: npm run build
         continue-on-error: false
+
+      - name: Create and push git tag
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -af "v${VERSION}" -m "Version ${VERSION}"
+          git push origin "v${VERSION}" --force
 
       - run: npm publish
         env:
