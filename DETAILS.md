@@ -216,7 +216,7 @@ The extracted sentences are joined into a single string and word-counted. If the
 
 #### 3. Flagging Criteria
 
-The `oobee-grading-text-contents` rule is **only enabled when WCAG AAA mode is on** (`enableWcagAaa = true`). It maps to **WCAG 3.1.5 (Reading Level)**.
+The `oobee-grading-text-contents` rule is **only enabled when WCAG AAA mode is on** (`enableWcagAaa = true`) and violations are flagged under **Manual Review Required** findings. It maps to **WCAG 3.1.5 (Reading Level)**.
 
 A page is **flagged** (incomplete) when the Flesch Reading Ease score is **50 or below**, indicating the text is potentially difficult to understand. The issue message reports the exact score and explains that the target passing score is above 50.
 
