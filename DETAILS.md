@@ -195,3 +195,32 @@ Note: Level AAA are disabled by default.  Please specify `enable-wcag-aaa` in ru
 | skip-link                           | Ensure all skip links have a focusable target                                                                                                  | Good to Fix |
 | tabindex                            | Ensures tabindex attribute values are not greater than 0                                                                                       | Good to Fix |
 | table-duplicate-name                | Ensure the `<caption>` element does not contain the same text as the summary attribute                                                         | Good to Fix |
+
+## Additional Information
+### How the Readability Grading Works
+
+#### 1. Text Extraction
+
+During a page scan, Oobee extracts text from all `<p>` elements on the page (via extractAndGradeText.ts or extractText.ts). The raw text is split into individual **sentences** using the pattern `/[^.!?]*[.!?]+/g` — only text segments ending with `.`, `!`, or `?` are kept.
+
+#### 2. Flesch Reading Ease Scoring
+
+The extracted sentences are joined into a single string and word-counted. If the page has **fewer than 20 words**, grading is skipped (score = 0, treated as a pass). Otherwise, the [Flesch Reading Ease](https://en.wikipedia.org/wiki/Flesch%E2%80%93Kincaid_readability_tests) formula is applied via the `text-readability` library in gradeReadability.ts:
+
+| Score Range | Interpretation |
+|---|---|
+| 90–100 | Very easy to read (5th grade) |
+| 60–70 | Easily understood by 13–15 year olds |
+| **≤ 50** | **Difficult — college level or above** |
+| 0–30 | Very difficult — best understood by university graduates |
+
+#### 3. Flagging Criteria
+
+The `oobee-grading-text-contents` rule is **only enabled when WCAG AAA mode is on** (`enableWcagAaa = true`). It maps to **WCAG 3.1.5 (Reading Level)**.
+
+A page is **flagged** (incomplete) when the Flesch Reading Ease score is **50 or below**, indicating the text is potentially difficult to understand. The issue message reports the exact score and explains that the target passing score is above 50.
+
+A page **passes** when:
+- The score is **above 50**, or
+- There are fewer than 20 words of paragraph text, or
+- No valid sentences (ending with punctuation) are found
