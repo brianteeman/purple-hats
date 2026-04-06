@@ -39,6 +39,8 @@ export function addUrlGuardScript(context, opts = {}) {
         get() { return String(win.location.toString()); },
         set(nextUrl) { if (isAllowedProtocol(nextUrl)) assignOriginal(nextUrl); },
       });
+    }).catch(() => {
+      // page may have closed before addInitScript completed; safe to ignore
     });
 
     const restoreToSafeUrl = async (page, attemptedUrl) => {
