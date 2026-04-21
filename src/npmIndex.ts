@@ -5,7 +5,7 @@ import axe, { AxeResults, ImpactValue } from 'axe-core';
 import { JSDOM } from 'jsdom';
 import { fileURLToPath } from 'url';
 import { EnqueueStrategy } from 'crawlee';
-import constants, { BrowserTypes, RuleFlags, ScannerTypes } from './constants/constants.js';
+import constants, { BrowserTypes, RuleFlags, ScannerTypes, a11yRuleShortDescriptionMap, a11yRuleLongDescriptionMap, a11yRuleStepByStepGuide } from './constants/constants.js';
 import {
   deleteClonedProfiles,
   getBrowserToRun,
@@ -638,6 +638,11 @@ const processAndSubmitResults = async (
             if (constants.a11yRuleShortDescriptionMap[ruleId]) {
               mergedResults[category].rules[ruleId].description = constants.a11yRuleShortDescriptionMap[ruleId];
             }
+
+            // Add short description, long description and step-by-step guide
+            mergedResults[category].rules[ruleId].shortDescription = a11yRuleShortDescriptionMap[ruleId];
+            mergedResults[category].rules[ruleId].longDescription = a11yRuleLongDescriptionMap[ruleId];
+            mergedResults[category].rules[ruleId].stepByStepGuide = a11yRuleStepByStepGuide[ruleId];
             
             // Add url to items
             mergedResults[category].rules[ruleId].items.forEach((item: any) => {
@@ -732,6 +737,11 @@ const processAndSubmitResults = async (
           if (constants.a11yRuleShortDescriptionMap[rule.rule]) {
             rule.description = constants.a11yRuleShortDescriptionMap[rule.rule];
           }
+
+          // Add short description, long description and step-by-step guide
+          rule.shortDescription = a11yRuleShortDescriptionMap[rule.rule];
+          rule.longDescription = a11yRuleLongDescriptionMap[rule.rule];
+          rule.stepByStepGuide = a11yRuleStepByStepGuide[rule.rule];
 
           if (rule.items) {
            rule.items.forEach((item: any) => {
@@ -877,5 +887,5 @@ export const scanPage = async (
   );
 };
 
-export { RuleFlags };
+export { RuleFlags, a11yRuleLongDescriptionMap, a11yRuleStepByStepGuide, getOobeeFunctionsScript };
 
