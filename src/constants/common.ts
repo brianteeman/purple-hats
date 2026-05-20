@@ -33,7 +33,7 @@ import constants, {
 } from './constants.js';
 import { consoleLogger } from '../logs.js';
 import { isUrlPdf } from '../crawlers/commonCrawlerFunc.js';
-import { cleanUpAndExit, randomThreeDigitNumberString, register } from '../utils.js';
+import { cleanUpAndExit, isFollowStrategy, randomThreeDigitNumberString, register } from '../utils.js';
 import { Answers, Data } from '../index.js';
 import { DeviceDescriptor } from '../types/types.js';
 import { getProxyInfo, proxyInfoToResolution, ProxySettings } from '../proxyService.js';
@@ -746,7 +746,9 @@ export const prepareData = async (argv: Answers): Promise<Data> => {
     playwrightDeviceDetailsObject,
     maxRequestsPerCrawl: maxpages || constants.maxRequestsPerCrawl,
     strategy:
-      strategy === 'same-hostname' ? EnqueueStrategy.SameHostname : EnqueueStrategy.SameDomain,
+      strategy === 'same-hostname' ? EnqueueStrategy.SameHostname
+      : strategy === 'ignore' ? EnqueueStrategy.All
+      : EnqueueStrategy.SameDomain,
     isLocalFileScan,
     browser: browserToRun,
     nameEmail,
@@ -899,6 +901,38 @@ const getRobotsTxtViaPlaywright = async (
   }
 };
 
+export const getSitemapsFromRobotsTxt = async (
+  url: string,
+  browser: string,
+  userDataDirectory: string,
+  extraHTTPHeaders: Record<string, string>,
+): Promise<string[]> => {
+  const domain = new URL(url).origin;
+  const robotsUrl = domain.concat('/robots.txt');
+
+  let robotsTxt: string;
+  try {
+    robotsTxt = await getRobotsTxtViaPlaywright(robotsUrl, browser, userDataDirectory, extraHTTPHeaders);
+  } catch (e) {
+    consoleLogger.info(`Unable to fetch robots.txt from ${robotsUrl} for sitemap discovery`);
+    return [];
+  }
+
+  if (!robotsTxt) return [];
+
+  const sitemaps: string[] = [];
+  const lines = robotsTxt.split(/\r?\n/);
+  for (const line of lines) {
+    if (line.toLowerCase().startsWith('sitemap:')) {
+      const sitemapUrl = line.substring('sitemap:'.length).trim();
+      if (sitemapUrl) {
+        sitemaps.push(sitemapUrl);
+      }
+    }
+  }
+  return sitemaps;
+};
+
 export const isDisallowedInRobotsTxt = (url: string): boolean => {
   if (!constants.robotsTxtUrls) return;
 
@@ -931,6 +965,8 @@ export const getLinksFromSitemap = async (
   userUrlInput: string,
   isIntelligent: boolean,
   extraHTTPHeaders: Record<string, string>,
+  strategy: EnqueueStrategy = EnqueueStrategy.All,
+  userUrl: string = userUrlInput,
 ) => {
   const scannedSitemaps = new Set<string>();
   const urls: Record<string, Request> = {}; // dictionary of requests to urls to be scanned
@@ -940,6 +976,7 @@ export const getLinksFromSitemap = async (
   const addToUrlList = (url: string) => {
     if (!url) return;
     if (isDisallowedInRobotsTxt(url)) return;
+    if (!isFollowStrategy(url, userUrl, strategy)) return;
 
     url = convertPathToLocalFile(url);
 

@@ -1,4 +1,4 @@
-import crawlee, { LaunchContext, Request, RequestList, Dataset } from 'crawlee';
+import crawlee, { EnqueueStrategy, LaunchContext, Request, RequestList, Dataset } from 'crawlee';
 import fs from 'fs';
 import * as path from 'path';
 import fsp from 'fs/promises';
@@ -23,7 +23,7 @@ import {
   waitForPageLoaded,
   isFilePath,
 } from '../constants/common.js';
-import { areLinksEqual, isWhitelistedContentType, register } from '../utils.js';
+import { areLinksEqual, isFollowStrategy, isWhitelistedContentType, register } from '../utils.js';
 import {
   handlePdfDownload,
   runPdfScan,
@@ -46,6 +46,8 @@ const crawlSitemap = async ({
   blacklistedPatterns,
   includeScreenshots,
   extraHTTPHeaders,
+  strategy = EnqueueStrategy.All,
+  userUrl = '',
   scanDuration = 0,
   fromCrawlIntelligentSitemap = false,
   userUrlInputFromIntelligent = null,
@@ -65,6 +67,8 @@ const crawlSitemap = async ({
   blacklistedPatterns: string[];
   includeScreenshots: boolean;
   extraHTTPHeaders: Record<string, string>;
+  strategy?: EnqueueStrategy;
+  userUrl?: string;
   scanDuration?: number;
   fromCrawlIntelligentSitemap?: boolean;
   userUrlInputFromIntelligent?: string;
@@ -99,6 +103,8 @@ const crawlSitemap = async ({
     userUrlInputFromIntelligent,
     fromCrawlIntelligentSitemap,
     extraHTTPHeaders,
+    strategy,
+    userUrl || sitemapUrl,
   );
 
   sitemapUrl = encodeURI(sitemapUrl);
@@ -327,7 +333,48 @@ const crawlSitemap = async ({
               return;
             }
 
+            if (isRedirected && !isFollowStrategy(actualUrl, request.url, 'same-hostname')) {
+              urlsCrawled.notScannedRedirects.push({
+                fromUrl: request.url,
+                toUrl: actualUrl,
+              });
+              guiInfoLog(guiInfoStatusTypes.SKIPPED, {
+                numScanned: urlsCrawled.scanned.length,
+                urlScanned: request.url,
+              });
+              return;
+            }
+
             const results = await runAxeScript({ includeScreenshots, page, randomToken });
+
+            // Detect JS redirects that fire during/after axe scan.
+            // Listen for navigation, then give a brief window for pending redirects to complete.
+            try {
+              let navigatedToUrl: string | null = null;
+              const onFrameNavigated = (frame: any) => {
+                if (frame === page.mainFrame()) {
+                  navigatedToUrl = frame.url();
+                }
+              };
+              page.on('framenavigated', onFrameNavigated);
+              await page.waitForTimeout(1000);
+              page.off('framenavigated', onFrameNavigated);
+
+              const postScanUrl = navigatedToUrl || page.url();
+              if (postScanUrl && postScanUrl !== 'about:blank' && !isFollowStrategy(postScanUrl, request.url, 'same-hostname')) {
+                urlsCrawled.notScannedRedirects.push({
+                  fromUrl: request.url,
+                  toUrl: postScanUrl,
+                });
+                guiInfoLog(guiInfoStatusTypes.SKIPPED, {
+                  numScanned: urlsCrawled.scanned.length,
+                  urlScanned: request.url,
+                });
+                return;
+              }
+            } catch (_) {
+              // Page/context was destroyed during navigation — handled by outer catch
+            }
 
             guiInfoLog(guiInfoStatusTypes.SCANNED, {
               numScanned: urlsCrawled.scanned.length,

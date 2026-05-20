@@ -7,7 +7,7 @@ import { consoleLogger, guiInfoLog } from '../logs.js';
 import crawlDomain from './crawlDomain.js';
 import crawlSitemap from './crawlSitemap.js';
 import { ViewportSettingsClass } from '../combine.js';
-import { getPlaywrightLaunchOptions } from '../constants/common.js';
+import { getPlaywrightLaunchOptions, getSitemapsFromRobotsTxt } from '../constants/common.js';
 import { register } from '../utils.js';
 
 const crawlIntelligentSitemap = async (
@@ -100,10 +100,28 @@ const crawlIntelligentSitemap = async (
     }
   };
 
+  // Discover sitemaps from robots.txt first (supports multiple Sitemap: directives)
+  let sitemapUrls: string[] = [];
   try {
-    sitemapUrl = await findSitemap(url, userDataDirectory, extraHTTPHeaders);
+    sitemapUrls = await getSitemapsFromRobotsTxt(url, browser, userDataDirectory, extraHTTPHeaders);
+    if (sitemapUrls.length > 0) {
+      console.log(`Found ${sitemapUrls.length} sitemap(s) in robots.txt: ${sitemapUrls.join(', ')}`);
+      sitemapExist = true;
+    }
   } catch (error) {
     consoleLogger.error(error);
+  }
+
+  // Fall back to hardcoded path probing if robots.txt had no sitemaps
+  if (!sitemapExist) {
+    try {
+      sitemapUrl = await findSitemap(url, userDataDirectory, extraHTTPHeaders);
+      if (sitemapExist) {
+        sitemapUrls = [sitemapUrl];
+      }
+    } catch (error) {
+      consoleLogger.error(error);
+    }
   }
 
   if (!sitemapExist) {
@@ -124,38 +142,53 @@ const crawlIntelligentSitemap = async (
       followRobots,
       extraHTTPHeaders,
       safeMode,
-      scanDuration, // Use full duration since no sitemap
+      scanDuration,
     });
   }
 
-  console.log(`Sitemap found at ${sitemapUrl}`);
-  urlsCrawledFinal = await crawlSitemap({
-    sitemapUrl,
-    randomToken,
-    host,
-    viewportSettings,
-    maxRequestsPerCrawl,
-    browser,
-    userDataDirectory,
-    specifiedMaxConcurrency,
-    fileTypes,
-    blacklistedPatterns,
-    includeScreenshots,
-    extraHTTPHeaders,
-    fromCrawlIntelligentSitemap,
-    userUrlInputFromIntelligent: url,
-    datasetFromIntelligent: dataset,
-    urlsCrawledFromIntelligent: urlsCrawled,
-    crawledFromLocalFile: false,
-    scanDuration,
-  });
+  // Process all discovered sitemaps sequentially, sharing dataset and urlsCrawled
+  for (const currentSitemapUrl of sitemapUrls) {
+    if (urlsCrawled.scanned.length >= maxRequestsPerCrawl) break;
+
+    const elapsed = Date.now() - startTime;
+    const remainingDuration = scanDuration > 0 ? Math.max(scanDuration - elapsed / 1000, 0) : scanDuration;
+    if (scanDuration > 0 && remainingDuration <= 0) {
+      durationExceeded = true;
+      break;
+    }
+
+    console.log(`Processing sitemap: ${currentSitemapUrl}`);
+    urlsCrawledFinal = await crawlSitemap({
+      sitemapUrl: currentSitemapUrl,
+      randomToken,
+      host,
+      viewportSettings,
+      maxRequestsPerCrawl,
+      browser,
+      userDataDirectory,
+      specifiedMaxConcurrency,
+      fileTypes,
+      blacklistedPatterns,
+      includeScreenshots,
+      extraHTTPHeaders,
+      strategy,
+      userUrl: url,
+      fromCrawlIntelligentSitemap,
+      userUrlInputFromIntelligent: url,
+      datasetFromIntelligent: dataset,
+      urlsCrawledFromIntelligent: urlsCrawled,
+      crawledFromLocalFile: false,
+      scanDuration: scanDuration > 0 ? remainingDuration : 0,
+    });
+  }
 
   const elapsed = Date.now() - startTime;
-  const remainingScanDuration = Math.max(scanDuration - elapsed / 1000, 0); // in seconds
+  const remainingScanDuration = scanDuration > 0 ? Math.max(scanDuration - elapsed / 1000, 0) : 0;
+  const hasDurationRemaining = scanDuration === 0 || remainingScanDuration > 0;
 
-  if (urlsCrawledFinal.scanned.length < maxRequestsPerCrawl && remainingScanDuration > 0) {
+  if (urlsCrawled.scanned.length < maxRequestsPerCrawl && hasDurationRemaining) {
     console.log(
-      `Continuing crawl from root website. Remaining scan time: ${remainingScanDuration.toFixed(1)}s`,
+      `Continuing crawl from root website.${scanDuration > 0 ? ` Remaining scan time: ${remainingScanDuration.toFixed(1)}s` : ''}`,
     );
     urlsCrawledFinal = await crawlDomain({
       url,
@@ -175,10 +208,10 @@ const crawlIntelligentSitemap = async (
       safeMode,
       fromCrawlIntelligentSitemap,
       datasetFromIntelligent: dataset,
-      urlsCrawledFromIntelligent: urlsCrawledFinal,
+      urlsCrawledFromIntelligent: urlsCrawled,
       scanDuration: remainingScanDuration,
     });
-  } else if (remainingScanDuration <= 0) {
+  } else if (!hasDurationRemaining) {
     console.log(
       `Crawl duration exceeded before more pages could be found (limit: ${scanDuration}s).`,
     );
@@ -186,7 +219,7 @@ const crawlIntelligentSitemap = async (
   }
 
   guiInfoLog(guiInfoStatusTypes.COMPLETED, {});
-  return { urlsCrawled: urlsCrawledFinal, durationExceeded };
+  return { urlsCrawled, durationExceeded };
 };
 
 export default crawlIntelligentSitemap;
