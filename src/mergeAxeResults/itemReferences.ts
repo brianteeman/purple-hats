@@ -69,37 +69,38 @@ const cloneCategoryWithReferenceItems = (category: ScanCategory): ScanCategory =
   }) as ScanCategory;
 */
 
-const cloneCategoryWithoutPageItems = (category: ScanCategory): ScanCategory =>
+const cloneCategoryLight = (category: ScanCategory, includeHtmlGroups: boolean): ScanCategory =>
   ({
     ...category,
     rules: category.rules.map(
       rule =>
         ({
-          ...rule,
-          pagesAffected: rule.pagesAffected.map(
-            page => {
-              const { items, ...rest } = page;
-
-              return {
-                ...rest,
-                itemsCount: page.itemsCount ?? (Array.isArray(items) ? items.length : 0),
-              } as any;
-            },
-          ),
+          rule: rule.rule,
+          description: rule.description,
+          helpUrl: rule.helpUrl,
+          conformance: rule.conformance,
+          totalItems: rule.totalItems,
+          axeImpact: rule.axeImpact,
+          ...(includeHtmlGroups && rule.htmlGroups ? { htmlGroups: rule.htmlGroups } : {}),
+          pagesAffected: rule.pagesAffected.map(page => ({
+            url: page.url,
+            pageTitle: page.pageTitle,
+            itemsCount: page.itemsCount ?? (Array.isArray((page as any).items) ? (page as any).items.length : 0),
+          })),
         }) as any,
     ),
   }) as ScanCategory;
 
 /**
  * Builds the embedded HTML-report payload from the full scan items.
- * The current report path omits page.items and relies on htmlGroups + itemsCount
- * to rebuild per-page occurrences in the browser.
+ * Includes htmlGroups for non-passed categories (Group by HTML Element),
+ * excludes them from passed to keep payload within browser memory limits.
  */
 export const convertItemsToReferences = (source: Pick<AllIssues, 'items'>): ScanItemsLight => {
   return {
-    mustFix: cloneCategoryWithoutPageItems(source.items.mustFix),
-    goodToFix: cloneCategoryWithoutPageItems(source.items.goodToFix),
-    needsReview: cloneCategoryWithoutPageItems(source.items.needsReview),
-    passed: cloneCategoryWithoutPageItems(source.items.passed),
+    mustFix: cloneCategoryLight(source.items.mustFix, true),
+    goodToFix: cloneCategoryLight(source.items.goodToFix, true),
+    needsReview: cloneCategoryLight(source.items.needsReview, true),
+    passed: cloneCategoryLight(source.items.passed, false),
   };
 };
