@@ -529,8 +529,10 @@ const buildColorContrastMessage = (node: NodeResultWithScreenshot): string | nul
 
     if (!hasContrastData) return;
 
-    const fgColor = data.fgColor || 'unknown foreground';
-    const bgColor = data.bgColor || 'unknown background';
+    if (!data.fgColor || !data.bgColor) return;
+
+    const fgColor = data.fgColor;
+    const bgColor = data.bgColor;
     const contrastRatio = String(data.contrastRatio ?? 'unknown');
     const fontSize = formatContrastFontSize(data.fontSize);
     const fontWeight = data.fontWeight || 'normal';
