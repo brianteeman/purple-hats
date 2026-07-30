@@ -15,6 +15,7 @@ import os from 'os';
 import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
+import { startCfProxyWorker, isCfProxyWorkerConfigured } from './cfProxyWorker.js';
 
 export interface ProxyInfo {
   // http/https: host:port OR user:pass@host:port (no scheme)
@@ -421,11 +422,19 @@ function parseWindowsRegistry(): ProxyInfo | null {
 /* ============================ Public API ============================ */
 
 export function getProxyInfo(): ProxyInfo | null {
-  const plat = os.platform();
+  // Cloudflare Worker proxy takes precedence over all other proxy detection.
+  // Starts a local SOCKS5 tunnel and points Chromium at it; the tunnel itself
+  // handles bypass IPs by connecting directly (see cfProxyWorker.ts).
   let info: ProxyInfo | null;
-  if (plat === 'win32') info = parseEnvProxyCommon() || parseWindowsRegistry();
-  else if (plat === 'darwin') info = parseEnvProxyCommon() || parseMacScutil();
-  else info = parseEnvProxyCommon(); // Linux/others
+  if (isCfProxyWorkerConfigured()) {
+    const cf = startCfProxyWorker();
+    info = cf ? { socks: cf.server } : null;
+  } else {
+    const plat = os.platform();
+    if (plat === 'win32') info = parseEnvProxyCommon() || parseWindowsRegistry();
+    else if (plat === 'darwin') info = parseEnvProxyCommon() || parseMacScutil();
+    else info = parseEnvProxyCommon(); // Linux/others
+  }
 
   // Apply INCLUDE_PROXY env: semicolon-separated domain globs that SHOULD use the proxy
   const includeProxy = process.env.INCLUDE_PROXY;
