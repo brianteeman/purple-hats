@@ -49,5 +49,4 @@ jobs:
           tags: |
             ghcr.io/${{ steps.repo.outputs.name }}:${{ env.RELEASE_TAG }}
             ghcr.io/${{ steps.repo.outputs.name }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true
