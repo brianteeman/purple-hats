@@ -2168,6 +2168,14 @@ export async function initModifiedUserAgent(
   _playwrightDeviceDetailsObject?: object,
   _userDataDirectory?: string,
 ) {
+  // If the caller already set OOBEE_USER_AGENT, respect it and skip the
+  // browser bootstrap.
+  const preset = process.env.OOBEE_USER_AGENT?.trim();
+  if (preset) {
+    process.env.OOBEE_USER_AGENT = preset;
+    return;
+  }
+
   // UA bootstrap must not use persistent context / user-data-dir.
   // Force headless so this transient browser never flashes a visible window
   // (particularly on macOS, where there's no Xvfb indirection).
