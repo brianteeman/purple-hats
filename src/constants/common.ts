@@ -2480,15 +2480,22 @@ export const waitForPageLoaded = async (page: Page) => {
   // (i.e. pages resolving via a hard deadline rather than a stability signal).
   // Emit warn only when we time out on stability — that's the case that most
   // often produces the intermittent hydration-timing findings.
+  let pageUrl: string;
+  try {
+    pageUrl = page.url();
+  } catch {
+    pageUrl = '<unknown>';
+  }
+
   if (stabilityReason === 'stability hard deadline') {
     consoleLogger.warn(
-      `waitForPageLoaded: stability hard deadline on ${page.url()} after ${phase1Ms}ms load + ${phase2Ms}ms stability + ${phase25Ms}ms assets. ` +
+      `waitForPageLoaded: stability hard deadline on ${pageUrl} after ${phase1Ms}ms load + ${phase2Ms}ms stability + ${phase25Ms}ms assets. ` +
         `Page may still be hydrating. Consider raising OOBEE_STABILITY_TIMEOUT_MS (current: ${stabilityTimeout}) ` +
         `or OOBEE_QUIET_MS (current: ${quietMs}).`,
     );
   } else {
     consoleLogger.debug(
-      `waitForPageLoaded: ${page.url()} load="${loadReason}" (${phase1Ms}ms) stability="${stabilityReason}" (${phase2Ms}ms) assets="${phase25Reason}" (${phase25Ms}ms)`,
+      `waitForPageLoaded: ${pageUrl} load="${loadReason}" (${phase1Ms}ms) stability="${stabilityReason}" (${phase2Ms}ms) assets="${phase25Reason}" (${phase25Ms}ms)`,
     );
   }
 };
