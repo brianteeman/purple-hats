@@ -20,6 +20,7 @@ import {
   isCfProxyWorkerConfigured,
   startFamilyDnsLocalProxy,
   isFamilyDnsLocalProxyConfigured,
+  isFamilyDnsEnabled,
 } from './cfProxyWorker.js';
 
 export interface ProxyInfo {
@@ -529,8 +530,22 @@ function toSocksServer(socks: string): string {
 export function proxyInfoToResolution(info: ProxyInfo | null): ProxyResolution {
   if (!info) return { kind: 'none' };
 
-  // If INCLUDE_PROXY is set, generate a PAC that only proxies the listed domains
+  // If INCLUDE_PROXY is set, generate a PAC that only proxies the listed domains.
+  //
+  // Exception: when CF_FAMILY_DNS is enabled, the local SOCKS5 proxy must see
+  // every hostname so Family DoH filtering applies universally. An include-only
+  // PAC would return DIRECT for non-listed hosts and defeat the filter. In that
+  // case we send all traffic through the local SOCKS5, and INCLUDE_PROXY is
+  // applied inside the SOCKS5 handler to decide worker-tunnel vs. direct-forward.
   if (info.includeList && info.includeList.length > 0) {
+    if (isFamilyDnsEnabled() && info.socks) {
+      return { kind: 'manual', settings: {
+        server: toSocksServer(info.socks),
+        username: info.username,
+        password: info.password,
+      }};
+    }
+
     // Determine the proxy server string
     let proxyServer: string | undefined;
     if (info.http) proxyServer = `http://${info.http}`;

@@ -240,9 +240,27 @@ interface DohCacheEntry {
 }
 const dohCache = new Map<string, DohCacheEntry>();
 
-function isFamilyDnsEnabled(): boolean {
+export function isFamilyDnsEnabled(): boolean {
   const v = process.env.CF_FAMILY_DNS?.trim().toLowerCase();
   return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
+
+let includeProxyPatternsCache: RegExp[] | null | undefined;
+function getIncludeProxyPatterns(): RegExp[] | null {
+  if (includeProxyPatternsCache !== undefined) return includeProxyPatternsCache;
+  const raw = process.env.INCLUDE_PROXY?.trim();
+  if (!raw) {
+    includeProxyPatternsCache = null;
+    return null;
+  }
+  includeProxyPatternsCache = compileGlobs(raw.split(/[,;]/));
+  return includeProxyPatternsCache;
+}
+
+function isIncludedForUpstream(hostname: string): boolean | null {
+  const patterns = getIncludeProxyPatterns();
+  if (!patterns || patterns.length === 0) return null;
+  return patterns.some((re) => re.test(hostname));
 }
 
 async function queryDoh(hostname: string, type: 'A' | 'AAAA'): Promise<string | null> {
@@ -533,6 +551,16 @@ async function handleSocks5(
     // Bypass listed ranges - transparently forward TCP connection using Node's net module
     if (resolution.bypass) {
       consoleLogger.info(`[cfProxyWorker] Bypassing Worker for ${hostname} (${resolution.ip}) - connecting directly`);
+      directForward(clientSocket, resolution.ip, port, hostname);
+      return;
+    }
+
+    // INCLUDE_PROXY: when set, only listed hostnames go via the Worker upstream.
+    // Non-listed hosts still get Family DNS filtering above (universally) and
+    // are then forwarded directly without the worker tunnel.
+    const included = isIncludedForUpstream(hostname);
+    if (included === false) {
+      consoleLogger.info(`[cfProxyWorker] ${hostname} not in INCLUDE_PROXY - forwarding directly`);
       directForward(clientSocket, resolution.ip, port, hostname);
       return;
     }
