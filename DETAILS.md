@@ -64,7 +64,7 @@ The details of each SSP / DSS clause for accessibility can be found at the [DSS 
 | WCAG 4.1.2  | WR-1           | A     | Yes      |             |              |
 | Best Practice|               |       |          | Yes         |              |
 
-Note: DSS SSP clauses (WP = Perceivable, WO = Operable, WU = Understandable, WR = Robust) are drawn from the Singapore Government DSS Control Catalog. AAA-level WCAG criteria and WCAG 3.3.2 (Labels or Instructions) do not have a directly named DSS SSP clause and are marked with "—".
+Note: DSS SSP clauses (WP = Perceivable, WO = Operable, WU = Understandable, WR = Robust) are drawn from the Singapore Government DSS Control Catalog. AAA-level do not have a directly named DSS SSP clause and are marked with "—".
 
 * The WCAG 2.1.3 check is done by 'Scrollable region must have keyboard access' which is a WCAG 2.1.1 (Must Fix) rule.
 
@@ -107,7 +107,7 @@ Note: DSS SSP clauses (WP = Perceivable, WO = Operable, WU = Understandable, WR 
 | dlitem                      | Ensures `<dt>` and `<dd>` elements are contained by a `<dl>`                                                                                          | Must Fix    | WCAG 1.3.1             | WP-6           |
 | document-title              | Ensures each HTML document contains a non-empty `<title>` element                                                                                     | Must Fix    | WCAG 2.4.2             | WO-8           |
 | duplicate-id-aria           | Ensures every id attribute value used in ARIA and in labels is unique                                                                                 | Must Fix    | WCAG 4.1.2             | WR-1           |
-| form-field-multiple-labels  | Ensures form field does not have multiple label elements                                                                                              | Must Fix    | WCAG 3.3.2             | —              |
+| form-field-multiple-labels  | Ensures form field does not have multiple label elements                                                                                              | Must Fix    | WCAG 3.3.2             | WO-12          |
 | frame-focusable-content     | Ensures `<frame>` and `<iframe>` elements with focusable content do not have tabindex=-1                                                              | Must Fix    | WCAG 2.1.1             | WO-1           |
 | frame-title-unique          | Ensures `<iframe>` and `<frame>` elements contain a unique title attribute                                                                            | Must Fix    | WCAG 4.1.2             | WR-1           |
 | frame-title                 | Ensures `<iframe>` and `<frame>` elements have an accessible name                                                                                     | Must Fix    | WCAG 4.1.2             | WR-1           |
