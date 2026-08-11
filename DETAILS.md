@@ -60,7 +60,7 @@ The details of each SSP / DSS clause for accessibility can be found at the [DSS 
 | WCAG 3.1.2  | WU-2           | AA    | Yes      |             |              |
 | WCAG 3.1.5  | —              | AAA   |          |             | Yes          |
 | WCAG 3.2.5  | —              | AAA   |          | Yes         |              |
-| WCAG 3.3.2  | —              | A     | Yes      |             |              |
+| WCAG 3.3.2  | WO-12          | A     | Yes      |             |              |
 | WCAG 4.1.2  | WR-1           | A     | Yes      |             |              |
 | Best Practice|               |       |          | Yes         |              |
 
