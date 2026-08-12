@@ -107,6 +107,7 @@ const filterAxeResultsScript = `
   function _oobeeTruncateHtml(html, maxBytes, suffix) {
     maxBytes = maxBytes !== undefined ? maxBytes : 1024;
     suffix   = suffix   !== undefined ? suffix   : '\\u2026'; // '…'
+    if (maxBytes <= 0) return html;
     var encoder = new TextEncoder();
     if (encoder.encode(html).length <= maxBytes) return html;
     var left = 0, right = html.length, result = '';
