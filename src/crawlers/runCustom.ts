@@ -32,6 +32,7 @@ export class ProcessPageParams {
   stopAll?: () => Promise<void>;
   entryUrl!: string;
   strategy: string;
+  maxPagesToScan?: number;
 
   constructor(
     scannedIdx: number,
@@ -52,6 +53,16 @@ export class ProcessPageParams {
   }
 }
 
+export interface RunCustomControls {
+  stop: () => Promise<void>;
+  focus: () => Promise<void>;
+}
+
+export interface RunCustomHooks {
+  onReady?: (controls: RunCustomControls) => void | Promise<void>;
+  exitOnError?: boolean;
+}
+
 const runCustom = async (
   url: string,
   randomToken: string,
@@ -62,11 +73,13 @@ const runCustom = async (
   includeScreenshots: boolean,
   initialCustomFlowLabel?: string,
   extraHTTPHeaders?: Record<string, string>,
+  hooks?: RunCustomHooks,
+  maxPagesToScan?: number,
 ) => {
   // checks and delete datasets path if it already exists
   process.env.CRAWLEE_STORAGE_DIR = getStoragePath(randomToken);
 
-  const urlsCrawled: UrlsCrawled = { ...constants.urlsCrawledObj };
+  const urlsCrawled = new UrlsCrawled();
   const { dataset } = await createCrawleeSubFolders(randomToken);
   const intermediateScreenshotsPath = getIntermediateScreenshotsPath(randomToken);
   const processPageParams = new ProcessPageParams(
@@ -80,6 +93,7 @@ const runCustom = async (
   );
 
   processPageParams.entryUrl = url;
+  processPageParams.maxPagesToScan = maxPagesToScan;
 
   if (initialCustomFlowLabel && initialCustomFlowLabel.trim()) {
     processPageParams.customFlowLabel = initialCustomFlowLabel.trim();
@@ -176,6 +190,20 @@ const runCustom = async (
     });
 
     await page.goto(url, { timeout: 0 });
+    if (hooks?.onReady) {
+      const focusBrowser = async () => {
+        const pages = context.pages().filter(existingPage => !existingPage.isClosed());
+        const targetPage = pages[pages.length - 1] || page;
+        if (!targetPage || targetPage.isClosed()) return;
+
+        await targetPage.bringToFront();
+        await targetPage.evaluate(() => window.focus()).catch(() => {});
+      };
+      await hooks.onReady({
+        stop: processPageParams.stopAll!,
+        focus: focusBrowser,
+      });
+    }
 
     // to execute and wait for all pages to close
     // idea is for promise to be pending until page.on('close') detected
@@ -203,7 +231,14 @@ const runCustom = async (
     await Promise.race([allPagesClosedPromise(pageClosePromises), contextClosedPromise]);
   } catch (error) {
     log(`PLAYWRIGHT EXECUTION ERROR ${error}`);
-    cleanUpAndExit(1, randomToken, true);
+    // Default to propagating the error when hooks are provided (library
+    // consumers), so we don't kill the caller's process. CLI callers do not
+    // pass hooks and continue to receive the historical cleanUpAndExit path.
+    const propagate = hooks?.exitOnError === false || (!!hooks && hooks.exitOnError !== true);
+    if (propagate) {
+      throw error;
+    }
+    await cleanUpAndExit(1, randomToken, true);
   }
 
   guiInfoLog(guiInfoStatusTypes.COMPLETED, {});
