@@ -46,6 +46,6 @@ jobs:
           git tag -af "latest" -m "Latest release ${VERSION}"
           git push origin "latest" --force
 
-      - run: npm publish
+      - run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
